@@ -4,5 +4,6 @@ pip install -q -U peft==0.4.0
 pip install -q -U accelerate==0.21.0
 pip install -q -U datasets
 pip install -q -U trl==0.4.7
+pip install scipy
 pip install wandb
 pip install sentencepiece
