@@ -7,3 +7,4 @@ pip install -q -U trl==0.4.7
 pip install scipy
 pip install wandb
 pip install sentencepiece
+pip install gradio
