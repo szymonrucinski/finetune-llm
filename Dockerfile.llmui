@@ -8,4 +8,4 @@ WORKDIR /usr/text-generation-webui
 RUN pip install -r requirements_nocuda.txt
 RUN pip install llama-cpp-python
 EXPOSE 7860
-CMD python server.py --model-dir /usr/models --listen --listen-port 7860 --listen-host 0.0.0.0 
+CMD python server.py --model-dir /usr/models --listen --listen-port 7860 --listen-host 0.0.0.0 --loader llamacpp --cpu --mlock
