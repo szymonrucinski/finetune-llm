@@ -41,17 +41,17 @@ theme = gr.themes.Monochrome(
 def generate(instruction):
     result = ""
     for x in llm(
-        ins.format(instruction), stop=["### Asystent:"], stream=True, max_tokens=512
+        ins.format(instruction), stop=["### Asystent:"], stream=True, max_tokens=256
     ):
         result += x["choices"][0]["text"]
         yield result
 
 
 examples = [
-    # "Czym jest sztuczna inteligencja?",
-    # "Jakie są największe wyzwania sztucznej inteligencji?",
-    # "Co należy zjeść po ciezkim treningu?",
-    # "Mam zamiar aplikować na stanowisko menadżera w firmie. Sformatuj mój życiorys.",
+    "Czym jest sztuczna inteligencja?",
+    "Jakie są największe wyzwania sztucznej inteligencji?",
+    "Co należy zjeść po ciezkim treningu?",
+    "Mam zamiar aplikować na stanowisko menadżera w firmie. Sformatuj mój życiorys.",
 ]
 
 
@@ -118,8 +118,9 @@ seafoam = SeafoamCustom()
 with gr.Blocks(theme=seafoam, analytics_enabled=False, css=css) as demo:
     with gr.Column():
         gr.Markdown(
-            """ ## Krakowiak the Polish LLM 🇵🇱 by [Szymon Ruciński](https://www.szymonrucinski.pl/)
-        
+            """ ## Krakowiak the Polish LLM 🇵🇱 
+                ###by [Szymon Ruciński](https://www.szymonrucinski.pl/)
+    
                 Wpisz w poniższe pole i kliknij przycisk, aby wygenerować odpowiedzi na najbardziej nurtujące Cię pytania! 😂
             
       """
