@@ -48,7 +48,7 @@ def generate(instruction):
 
 
 examples = [
-    "Czym jest sztuczna inteligencja?",
+    # "Czym jest sztuczna inteligencja?",
     # "Jakie są największe wyzwania sztucznej inteligencji?",
     # "Co należy zjeść po ciezkim treningu?",
     # "Mam zamiar aplikować na stanowisko menadżera w firmie. Sformatuj mój życiorys.",
@@ -151,5 +151,4 @@ with gr.Blocks(theme=seafoam, analytics_enabled=False, css=css) as demo:
 
 # demo.queue(concurrency_count=1).launch(debug=False)
 demo.queue(concurrency_count=1, max_size=20, api_open=False)
-demo.launch(enable_queue=True, share=False,
-           server_name="0.0.0.0", server_port=7860)
+demo.launch(enable_queue=True, share=False)
