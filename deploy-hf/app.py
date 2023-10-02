@@ -41,7 +41,7 @@ theme = gr.themes.Monochrome(
 def generate(instruction):
     result = ""
     for x in llm(
-        ins.format(instruction), stop=["### Asystent:"], stream=True, max_tokens=256
+        ins.format(instruction), stop=["### Asystent:"], stream=True, max_tokens=128
     ):
         result += x["choices"][0]["text"]
         yield result
