@@ -50,7 +50,7 @@ def generate(instruction):
 examples = [
     "Czym jest sztuczna inteligencja?",
     "Jakie są największe wyzwania sztucznej inteligencji?",
-    "Co należy zjeść po ciezkim treningu?",
+    "Napisz proszę co należy zjeść po ciezkim treningu?",
     "Mam zamiar aplikować na stanowisko menadżera w firmie. Sformatuj mój życiorys.",
 ]
 
@@ -120,7 +120,6 @@ with gr.Blocks(theme=seafoam, analytics_enabled=False, css=css) as demo:
         gr.Markdown(
             """ ## Krakowiak the Polish LLM 🇵🇱 
                 ###by [Szymon Ruciński](https://www.szymonrucinski.pl/)
-    
                 Wpisz w poniższe pole i kliknij przycisk, aby wygenerować odpowiedzi na najbardziej nurtujące Cię pytania! 😂
             
       """
