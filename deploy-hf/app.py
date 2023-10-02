@@ -118,8 +118,8 @@ seafoam = SeafoamCustom()
 with gr.Blocks(theme=seafoam, analytics_enabled=False, css=css) as demo:
     with gr.Column():
         gr.Markdown(
-            """ ## Krakowiak the Polish LLM 🇵🇱 
-                ###by [Szymon Ruciński](https://www.szymonrucinski.pl/)
+            """ ## Krakowiak the Polish LLM 🤖 
+                ### by [Szymon Ruciński](https://www.szymonrucinski.pl/) \n
                 Wpisz w poniższe pole i kliknij przycisk, aby wygenerować odpowiedzi na najbardziej nurtujące Cię pytania! 😂
             
       """
