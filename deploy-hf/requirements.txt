@@ -1,3 +1,2 @@
 huggingface-hub
 gradio
-llama-cpp-python
