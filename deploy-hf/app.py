@@ -123,9 +123,9 @@ seafoam = SeafoamCustom()
 with gr.Blocks(theme=seafoam, analytics_enabled=False, css=css) as demo:
     with gr.Column():
         gr.Markdown(
-            """ ## Krakowiak Polski model językowy :pl:
+            """ ## Krakowiak Polski model językowy `:pl:`
                 ### by [Szymon Ruciński](https://www.szymonrucinski.pl/) \n
-                Wpisz w poniższe pole i kliknij przycisk, aby wygenerować odpowiedzi na najbardziej nurtujące Cię pytania! :blush: \n
+                Wpisz w poniższe pole i kliknij przycisk, aby wygenerować odpowiedzi na najbardziej nurtujące Cię pytania! `:blush:` \n
                 ***W celu zapewnienia optymalnej wydajności korzystasz z modelu o zredukowanej liczbie parametrów.***
       """
         )
