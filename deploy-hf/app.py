@@ -158,7 +158,13 @@ with gr.Blocks(theme=seafoam, analytics_enabled=False, css=css) as demo:
 
     submit.click(generate, inputs=[instruction], outputs=[output])
     instruction.submit(generate, inputs=[instruction], outputs=[output])
-    stop_generation.click(cancels=[submit, instruction, generate])
+    stop_generation.click(
+        fn=None,
+        inputs=None,
+        outputs=None,
+        cancels=[instruction, submit],
+        queue=False,
+    )
 
 demo.queue(max_size=16, concurrency_count=1)
 demo.launch()
