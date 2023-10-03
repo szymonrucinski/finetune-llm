@@ -45,7 +45,7 @@ def generate(instruction):
         stop=["### Asystent:"],
         stream=True,
         max_tokens=128,
-        temperature=0.6,
+        temperature=0.5,
     ):
         result += x["choices"][0]["text"]
         yield result
