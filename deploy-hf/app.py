@@ -25,8 +25,8 @@ llm.set_cache(cache)
 ins = """### Użytkownik: {} ### Asystent: """
 
 theme = gr.themes.Monochrome(
-    primary_hue="indigo",
-    secondary_hue="blue",
+    primary_hue="orange",
+    secondary_hue="red",
     neutral_hue="slate",
     radius_size=gr.themes.sizes.radius_sm,
     font=[
@@ -41,13 +41,18 @@ theme = gr.themes.Monochrome(
 def generate(instruction):
     result = ""
     for x in llm(
-        ins.format(instruction), stop=["### Asystent:"], stream=True, max_tokens=128
+        ins.format(instruction),
+        stop=["### Asystent:"],
+        stream=True,
+        max_tokens=128,
+        temperature=0.6,
     ):
         result += x["choices"][0]["text"]
         yield result
 
 
 examples = [
+    "Jaki obiektyw jest idealny do portretów?",
     "Czym jest sztuczna inteligencja?",
     "Jakie są największe wyzwania sztucznej inteligencji?",
     "Napisz proszę co należy zjeść po ciezkim treningu?",
@@ -118,9 +123,10 @@ seafoam = SeafoamCustom()
 with gr.Blocks(theme=seafoam, analytics_enabled=False, css=css) as demo:
     with gr.Column():
         gr.Markdown(
-            """ ## Krakowiak the Polish LLM 🤖 
+            """ ## Krakowiak Polski model językowy <link href="data:image/x-icon;base64,AAABAAEAEBAAAAAAAABoBQAAFgAAACgAAAAQAAAAIAAAAAEACAAAAAAAAAEAAAAAAAAAAAAAAAEAAAAAAAAsEKkA+fn5ADwT2gA8Fd0Arq6uADoS1QD39/cALw+kAE85mAA6FNgASTOZAPX19QA6E9MA8/PzAPn6+AD8+fsAqKioAHNroACqqKgA/P/7AE05mgAwD6YALQ6pADkQ3QD+/v4AOhXPAPz6+QD8/PwAMhG6ADkR2wDPz88AqKu6AP/+/wA7FNsA5eTmAPr6+gCvrawAMxHDAK+vrwArD6gAMwrXAPr4+ADa2toAOxTcADgV0QDn5+cATjiXAHRrowAzD7kAORPXAP38/gD09PQA///+AOXl5QBQPZoA5eToADQRxQDU1NQANArZADEQpwD9//8ALQm7AP///wD9+/oAORTWACsHuQD9/f0AORTOAMHBwQA8FdwA+/v7ALCurQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAID4YNBM3LxQULzcTNBg+ID48IA42FjAcHDAWNg4gPD4YIB8HOCxACQlALDgHHyAYPCk7JQwJKysrKwkMJRUpPDIuOAUhISsrKyshIQU4CDIiJxkCISsrKysrK0UCQwAiETAxAwMrAwMDAysDAzEwEQo9KDoXHR0dHR0dFzooQQoSKho+Pj4+Pj4+Pj4+PyoSJDkPPj4+Pj4+Pj4+Pg85RzVEBkI+Pj4+Pj4+PkIGRDVCEA1GGD4+Pj4+PhhGDRBCPgYeCxsYPj4+PhgbCx4GPj4+RDUBG0IYGEIbATVEPj4+Pj4BJjNGIyNGMyYBPj4+GD4+PkItBBAQBC1CPj4+GAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=" rel="icon" type="image/x-icon">
                 ### by [Szymon Ruciński](https://www.szymonrucinski.pl/) \n
-                Wpisz w poniższe pole i kliknij przycisk, aby wygenerować odpowiedzi na najbardziej nurtujące Cię pytania! 😂
+                Wpisz w poniższe pole i kliknij przycisk, aby wygenerować odpowiedzi na najbardziej nurtujące Cię pytania! 😂 \n
+                W celu zapewnienia optymalnej wydajności korzystasz z modelu o zredukowanej liczbie parametrów.
             
       """
         )
@@ -152,4 +158,5 @@ with gr.Blocks(theme=seafoam, analytics_enabled=False, css=css) as demo:
 # demo.queue(concurrency_count=1).launch(debug=False)
 # demo.queue(concurrency_count=1, max_size=20, api_open=False)
 # demo.launch(enable_queue=True, share=False)
-demo.queue(concurrency_count=1).launch(debug=False)
+demo.queue(concurrency_count=1, max_size=3)
+demo.launch(debug=True, enable_queue=True, share=False)
