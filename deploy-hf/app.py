@@ -52,7 +52,7 @@ def generate(instruction):
 
 
 examples = [
-    # "Jaki obiektyw jest idealny do portretów?",
+    "Jaki obiektyw jest idealny do portretów?",
     # "Czym jest sztuczna inteligencja?",
     # "Jakie są największe wyzwania sztucznej inteligencji?",
     # "Napisz proszę co należy zjeść po ciezkim treningu?",
