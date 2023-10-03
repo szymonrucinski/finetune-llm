@@ -160,9 +160,5 @@ with gr.Blocks(theme=seafoam, analytics_enabled=False, css=css) as demo:
     instruction.submit(generate, inputs=[instruction], outputs=[output])
     stop_generation.click(cancels=[submit, instruction, generate])
 
-
-# demo.queue(concurrency_count=1).launch(debug=False)
-# demo.queue(concurrency_count=1, max_size=20, api_open=False)
-# demo.launch(enable_queue=True, share=False)
-demo.queue(concurrency_count=1, max_size=3)
-demo.launch(debug=True, enable_queue=True, share=False)
+demo.queue(max_size=16, concurrency_count=1)
+demo.launch()
