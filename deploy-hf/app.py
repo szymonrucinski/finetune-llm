@@ -142,7 +142,12 @@ with gr.Blocks(theme=seafoam, analytics_enabled=False, css=css) as demo:
                 with gr.Box():
                     gr.Markdown("**Odpowiedź**")
                     output = gr.Markdown(elem_id="q-output")
-                submit = gr.Button("Wyślij", variant="primary")
+                with gr.Row():
+                    submit = gr.Button("Wyślij", variant="primary")
+                    stop_generation = gr.Button(
+                        "Zatrzymaj generowanie", variant="secondary"
+                    )
+
                 gr.Examples(
                     label="Przykłady",
                     examples=examples,
@@ -154,6 +159,8 @@ with gr.Blocks(theme=seafoam, analytics_enabled=False, css=css) as demo:
 
     submit.click(generate, inputs=[instruction], outputs=[output])
     instruction.submit(generate, inputs=[instruction], outputs=[output])
+    stop_generation.click(cancels=[submit, instruction])
+
 
 # demo.queue(concurrency_count=1).launch(debug=False)
 # demo.queue(concurrency_count=1, max_size=20, api_open=False)
