@@ -159,7 +159,7 @@ with gr.Blocks(theme=seafoam, analytics_enabled=False, css=css) as demo:
     submit.click(generate, inputs=[instruction], outputs=[output])
     instruction.submit(generate, inputs=[instruction], outputs=[output])
     stop_generation.click(
-        cancels=[generate],
+        cancels=[submit, instruction],
         queue=False,
     )
 
