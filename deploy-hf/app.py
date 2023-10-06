@@ -202,7 +202,7 @@ with gr.Blocks(theme=seafoam, analytics_enabled=False, css=css) as demo:
                     label="Przykłady",
                     examples=examples,
                     inputs=[instruction],
-                    cache_examples=True,
+                    cache_examples=False,
                     fn=process_example,
                     outputs=[output],
                 )
