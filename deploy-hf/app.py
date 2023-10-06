@@ -46,7 +46,7 @@ def generate(
     top_k,
     rep_penalty,): 
     result = ""
-    for x in llm(ins.format(instruction), stop=['USER:'], stream=True, max_tokens=max_new_tokens,temperature=temp, top_p=top_p, top_k=top_k, repeat_penalty=rep_penalty):
+    for x in llm(ins.format(instruction), stop=['### Asystent:'], stream=True, max_tokens=max_new_tokens,temperature=temp, top_p=top_p, top_k=top_k, repeat_penalty=rep_penalty):
         result += x['choices'][0]['text']
         yield result
 
