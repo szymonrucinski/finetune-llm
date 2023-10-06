@@ -1,2 +1,2 @@
 huggingface-hub
-gradio
+gradio=3.45.2
