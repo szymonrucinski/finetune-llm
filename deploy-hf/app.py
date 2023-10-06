@@ -217,4 +217,6 @@ with gr.Blocks(theme=seafoam, analytics_enabled=False, css=css) as demo:
         inputs=[instruction, MAX_NEW_TOKENS, TEMP, TOP_P, TOP_K, REP_PENALTY],
         outputs=[output],
     )
-demo.queue(concurrency_count=1, max_size=1).launch(debug=True)
+#demo.queue(concurrency_count=1, max_size=1).launch(debug=True)
+demo.launch()
+
