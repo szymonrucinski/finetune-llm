@@ -15,7 +15,7 @@ hf_hub_download(
     local_dir=".",
 )
 
-llm = Llama(model_path="./krakowiak-7b.gguf.q4_k_m.bin", rms_norm_eps=1e-5, n_ctx=512 )
+llm = Llama(model_path="./krakowiak-7b.gguf.q4_k_m.bin", rms_norm_eps=1e-5, n_ctx=512)
 
 cache = LlamaRAMCache(capacity_bytes=2 << 30)
 
@@ -44,14 +44,25 @@ def generate(
     temp,
     top_p,
     top_k,
-    rep_penalty,): 
+    rep_penalty,
+):
     result = ""
     try:
-        for x in llm(ins.format(instruction), stop=['### Asystent:'], stream=True, max_tokens=max_new_tokens,temperature=temp, top_p=top_p, top_k=top_k, repeat_penalty=rep_penalty):
-            result += x['choices'][0]['text']
+        for x in llm(
+            ins.format(instruction),
+            stop=["### Asystent:"],
+            stream=True,
+            max_tokens=max_new_tokens,
+            temperature=temp,
+            top_p=top_p,
+            top_k=top_k,
+            repeat_penalty=rep_penalty,
+        ):
+            result += x["choices"][0]["text"]
             yield result
     except e:
         return result
+
 
 examples = [
     "Jaki obiektyw jest idealny do portretów?",
@@ -206,4 +217,4 @@ with gr.Blocks(theme=seafoam, analytics_enabled=False, css=css) as demo:
         inputs=[instruction, MAX_NEW_TOKENS, TEMP, TOP_P, TOP_K, REP_PENALTY],
         outputs=[output],
     )
-demo.queue(concurrency_count=1).launch(debug=False)
+demo.queue(concurrency_count=1, max_size=1).launch(debug=False)
