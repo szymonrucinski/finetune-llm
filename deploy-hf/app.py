@@ -51,12 +51,12 @@ def generate(
         yield result
 
 examples = [
-    "Jaki obiektyw jest idealny do portretów?",
-    "Kiedy powinienem wybrać rower gravelowy a kiedy szosowy?",
-    "Czym jest sztuczna inteligencja?",
-    "Jakie są największe wyzwania sztucznej inteligencji?",
-    "Napisz proszę co należy zjeść po ciezkim treningu?",
-    "Mam zamiar aplikować na stanowisko menadżera w firmie. Sformatuj mój życiorys.",
+    # "Jaki obiektyw jest idealny do portretów?",
+    # "Kiedy powinienem wybrać rower gravelowy a kiedy szosowy?",
+    # "Czym jest sztuczna inteligencja?",
+    # "Jakie są największe wyzwania sztucznej inteligencji?",
+    # "Napisz proszę co należy zjeść po ciezkim treningu?",
+    # "Mam zamiar aplikować na stanowisko menadżera w firmie. Sformatuj mój życiorys.",
 ]
 
 
@@ -197,11 +197,13 @@ with gr.Blocks(theme=seafoam, analytics_enabled=False, css=css) as demo:
         generate,
         inputs=[instruction, MAX_NEW_TOKENS, TEMP, TOP_P, TOP_K, REP_PENALTY],
         outputs=[output],
+        queue=True,
     )
     instruction.submit(
         generate,
         inputs=[instruction, MAX_NEW_TOKENS, TEMP, TOP_P, TOP_K, REP_PENALTY],
         outputs=[output],
+        queue=True,
     )
 demo.queue(max_size=16, concurrency_count=1)
 demo.launch()
