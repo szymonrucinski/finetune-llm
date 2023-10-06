@@ -51,12 +51,12 @@ def generate(
         yield result
 
 examples = [
-    # "Jaki obiektyw jest idealny do portretów?",
-    # "Kiedy powinienem wybrać rower gravelowy a kiedy szosowy?",
-    # "Czym jest sztuczna inteligencja?",
-    # "Jakie są największe wyzwania sztucznej inteligencji?",
-    # "Napisz proszę co należy zjeść po ciezkim treningu?",
-    # "Mam zamiar aplikować na stanowisko menadżera w firmie. Sformatuj mój życiorys.",
+    "Jaki obiektyw jest idealny do portretów?",
+    "Kiedy powinienem wybrać rower gravelowy a kiedy szosowy?",
+    "Czym jest sztuczna inteligencja?",
+    "Jakie są największe wyzwania sztucznej inteligencji?",
+    "Napisz proszę co należy zjeść po ciezkim treningu?",
+    "Mam zamiar aplikować na stanowisko menadżera w firmie. Sformatuj mój życiorys.",
 ]
 
 
