@@ -200,13 +200,10 @@ with gr.Blocks(theme=seafoam, analytics_enabled=False, css=css) as demo:
         generate,
         inputs=[instruction, MAX_NEW_TOKENS, TEMP, TOP_P, TOP_K, REP_PENALTY],
         outputs=[output],
-        queue=True,
     )
     instruction.submit(
         generate,
         inputs=[instruction, MAX_NEW_TOKENS, TEMP, TOP_P, TOP_K, REP_PENALTY],
         outputs=[output],
-        queue=True,
     )
-demo.queue(max_size=16, concurrency_count=1)
-demo.launch()
+demo.queue(concurrency_count=1).launch(debug=False)
