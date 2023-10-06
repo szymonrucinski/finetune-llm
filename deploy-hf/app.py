@@ -15,7 +15,7 @@ hf_hub_download(
     local_dir=".",
 )
 
-llm = Llama(model_path="./krakowiak-7b.gguf.q4_k_m.bin", rms_norm_eps=1e-5)
+llm = Llama(model_path="./krakowiak-7b.gguf.q4_k_m.bin", rms_norm_eps=1e-5, n_ctx=512 )
 
 cache = LlamaRAMCache(capacity_bytes=2 << 30)
 
@@ -38,30 +38,30 @@ theme = gr.themes.Monochrome(
 )
 
 
-def generate(instruction):
+def generate(
+    instruction,
+    max_new_tokens,
+    temp,
+    top_p,
+    top_k,
+    rep_penalty,): 
     result = ""
-    for x in llm(
-        ins.format(instruction),
-        stop=["### Asystent:"],
-        stream=True,
-        max_tokens=128,
-        temperature=0.5,
-    ):
-        result += x["choices"][0]["text"]
+    for x in llm(ins.format(instruction), stop=['USER:'], stream=True, max_tokens=max_new_tokens,temperature=temp, top_p=top_p, top_k=top_k, repeat_penalty=rep_penalty):
+        result += x['choices'][0]['text']
         yield result
-
 
 examples = [
     "Jaki obiektyw jest idealny do portretów?",
-    # "Czym jest sztuczna inteligencja?",
-    # "Jakie są największe wyzwania sztucznej inteligencji?",
-    # "Napisz proszę co należy zjeść po ciezkim treningu?",
-    # "Mam zamiar aplikować na stanowisko menadżera w firmie. Sformatuj mój życiorys.",
+    "Kiedy powinienem wybrać rower gravelowy a kiedy szosowy?",
+    "Czym jest sztuczna inteligencja?",
+    "Jakie są największe wyzwania sztucznej inteligencji?",
+    "Napisz proszę co należy zjeść po ciezkim treningu?",
+    "Mam zamiar aplikować na stanowisko menadżera w firmie. Sformatuj mój życiorys.",
 ]
 
 
-def process_example(args):
-    for x in generate(args):
+def process_example(input):
+    for x in generate(input, 256, 0.5, 0.9, 40, 1.2):
         pass
     return x
 
@@ -119,15 +119,14 @@ class SeafoamCustom(Base):
 
 seafoam = SeafoamCustom()
 
-
 with gr.Blocks(theme=seafoam, analytics_enabled=False, css=css) as demo:
     with gr.Column():
         gr.Markdown(
-            """ ## Krakowiak - Polski model językowy 🇵🇱
+            """ ## 🤖 Krakowiak - Polski model językowy 🤖 \n
                 ### by [Szymon Ruciński](https://www.szymonrucinski.pl/) \n
                 Wpisz w poniższe pole i kliknij przycisk, aby wygenerować odpowiedzi na najbardziej nurtujące Cię pytania! 🤗 \n
                 ***W celu zapewnienia optymalnej wydajności korzystasz z modelu o zredukowanej liczbie parametrów.***
-      """
+            """
         )
 
         with gr.Row():
@@ -143,10 +142,48 @@ with gr.Blocks(theme=seafoam, analytics_enabled=False, css=css) as demo:
                     output = gr.Markdown(elem_id="q-output")
                 with gr.Row():
                     submit = gr.Button("Wyślij", variant="primary")
-                    stop_generation = gr.Button(
-                        "Zatrzymaj generowanie", variant="secondary"
-                    )
 
+                with gr.Accordion(label="Zaawansowane Ustawienia", open=False):
+                    MAX_NEW_TOKENS = gr.Slider(
+                        label="Maksymalna liczba nowych tokenów",
+                        minimum=64,
+                        maximum=256,
+                        step=16,
+                        value=128,
+                        interactive=True,
+                    )
+                    TEMP = gr.Slider(
+                        label="Stopień Kreatywności",
+                        minimum=0.1,
+                        maximum=1.0,
+                        step=0.1,
+                        value=0.5,
+                        interactive=True,
+                    )
+                    TOP_P = gr.Slider(
+                        label="Top-P",
+                        minimum=0.05,
+                        maximum=1.0,
+                        step=0.05,
+                        value=0.9,
+                        interactive=True,
+                    )
+                    TOP_K = gr.Slider(
+                        label="Top-K",
+                        minimum=20,
+                        maximum=1000,
+                        step=20,
+                        value=40,
+                        interactive=True,
+                    )
+                    REP_PENALTY = gr.Slider(
+                        label="Repetition penalty",
+                        minimum=1.0,
+                        maximum=2.0,
+                        step=0.05,
+                        value=1.2,
+                        interactive=True,
+                    )
                 gr.Examples(
                     label="Przykłady",
                     examples=examples,
@@ -156,12 +193,15 @@ with gr.Blocks(theme=seafoam, analytics_enabled=False, css=css) as demo:
                     outputs=[output],
                 )
 
-    submit.click(generate, inputs=[instruction], outputs=[output])
-    instruction.submit(generate, inputs=[instruction], outputs=[output])
-    stop_generation.click(
-        cancels=[submit, instruction],
-        queue=False,
+    click = submit.click(
+        generate,
+        inputs=[instruction, MAX_NEW_TOKENS, TEMP, TOP_P, TOP_K, REP_PENALTY],
+        outputs=[output],
     )
-
+    instruction.submit(
+        generate,
+        inputs=[instruction, MAX_NEW_TOKENS, TEMP, TOP_P, TOP_K, REP_PENALTY],
+        outputs=[output],
+    )
 demo.queue(max_size=16, concurrency_count=1)
 demo.launch()
