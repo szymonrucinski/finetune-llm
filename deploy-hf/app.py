@@ -18,9 +18,9 @@ hf_hub_download(
 
 llm = Llama(model_path="./krakowiak-7b.gguf.q4_k_m.bin", rms_norm_eps=1e-5, n_ctx=512)
 
-cache = LlamaRAMCache(capacity_bytes=2 << 30)
+# cache = LlamaRAMCache(capacity_bytes=2 << 30)
 
-llm.set_cache(cache)
+# llm.set_cache(cache)
 
 
 ins = """### Użytkownik: {} ### Asystent: """
@@ -227,6 +227,6 @@ with gr.Blocks(theme=seafoam, analytics_enabled=False, css=css) as demo:
 
 
 if __name__ == "__main__":
-    demo.queue()
+    demo.queue(concurrency_count=1, max_size=1)
     demo.launch(server_name="0.0.0.0", server_port=7860, debug=True)
 
