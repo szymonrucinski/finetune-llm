@@ -172,7 +172,7 @@ with gr.Blocks(theme=seafoam, analytics_enabled=False, css=css) as demo:
                     )
                     TEMP = gr.Slider(
                         label="Stopień Kreatywności",
-                        minimum=0.1,
+                        minimum=0.0,
                         maximum=1.0,
                         step=0.1,
                         value=0.5,
@@ -188,9 +188,9 @@ with gr.Blocks(theme=seafoam, analytics_enabled=False, css=css) as demo:
                     )
                     TOP_K = gr.Slider(
                         label="Top-K",
-                        minimum=20,
+                        minimum=0,
                         maximum=1000,
-                        step=20,
+                        step=1,
                         value=40,
                         interactive=True,
                     )
