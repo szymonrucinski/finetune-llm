@@ -167,7 +167,7 @@ with gr.Blocks(theme=seafoam, analytics_enabled=False, css=css) as demo:
                         minimum=64,
                         maximum=256,
                         step=16,
-                        value=128,
+                        value=112,
                         interactive=True,
                     )
                     TEMP = gr.Slider(
