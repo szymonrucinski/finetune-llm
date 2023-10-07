@@ -1,5 +1,6 @@
 huggingface-hub
-llama-cpp-python 
+llama-cpp-python
+psutil
 gradio==3.39.0
 
 
