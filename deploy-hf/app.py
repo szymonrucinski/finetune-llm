@@ -218,4 +218,9 @@ with gr.Blocks(theme=seafoam, analytics_enabled=False, css=css) as demo:
         outputs=[output],
     )
 #demo.queue(concurrency_count=1, max_size=1).launch(debug=True)
-demo.queue(concurrency_count=1).launch(debug=True)
+
+
+if __name__ == "__main__":
+    demo.queue()
+    demo.launch(server_name="0.0.0.0", server_port=7860)
+
