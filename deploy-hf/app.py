@@ -175,7 +175,7 @@ with gr.Blocks(theme=seafoam, analytics_enabled=False, css=css) as demo:
                         minimum=0.0,
                         maximum=1.0,
                         step=0.1,
-                        value=0.5,
+                        value=0.7,
                         interactive=True,
                     )
                     TOP_P = gr.Slider(
@@ -183,7 +183,7 @@ with gr.Blocks(theme=seafoam, analytics_enabled=False, css=css) as demo:
                         minimum=0.05,
                         maximum=1.0,
                         step=0.05,
-                        value=0.9,
+                        value=0.95,
                         interactive=True,
                     )
                     TOP_K = gr.Slider(
@@ -191,7 +191,7 @@ with gr.Blocks(theme=seafoam, analytics_enabled=False, css=css) as demo:
                         minimum=0,
                         maximum=1000,
                         step=1,
-                        value=40,
+                        value=0,
                         interactive=True,
                     )
                     REP_PENALTY = gr.Slider(
