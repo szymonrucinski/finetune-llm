@@ -4,6 +4,7 @@ import gradio as gr
 from gradio.themes.base import Base
 from gradio.themes.utils import colors, fonts, sizes
 import subprocess
+import psutil
 
 from huggingface_hub import hf_hub_download
 from llama_cpp import Llama
@@ -37,6 +38,12 @@ theme = gr.themes.Monochrome(
     ],
 )
 
+def get_system_memory():
+    memory = psutil.virtual_memory()
+    memory_percent = memory.percent
+    memory_used = memory.used / (1024.0 ** 3)
+    memory_total = memory.total / (1024.0 ** 3)
+    return {"percent": f"{memory_percent}%", "used": f"{memory_used:.3f}GB", "total": f"{memory_total:.3f}GB"}
 
 def generate(
     instruction,
@@ -206,6 +213,8 @@ with gr.Blocks(theme=seafoam, analytics_enabled=False, css=css) as demo:
                     fn=process_example,
                     outputs=[output],
                 )
+                gr.JSON(get_system_memory, every=1)
+
 
     click = submit.click(
         generate,
