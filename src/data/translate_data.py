@@ -1,6 +1,8 @@
 import requests
 import pandas as pd
 import tqdm
+import argparse
+
 
 url = "https://translate.apostroph.ch/api/unstable/v3/translate"
 headers = {
@@ -18,7 +20,11 @@ headers = {
 
 
 def translate_text(
-    file_path, output_path, source_language, target_language, columns_to_translate
+    file_path: str,
+    output_path: str,
+    source_language: str,
+    target_language: str,
+    columns_to_translate: list,
 ):
     ## create dictonary of lists for columns
     df = pd.read_csv(file_path)
@@ -46,3 +52,38 @@ def translate_text(
     translation_df.to_csv("translation_" + output_path, index=False)
     df = pd.concat([df, translation_df], axis=1)
     df.to_csv(output_path, index=False)
+
+
+def main():
+    """Translate text in a file."""
+    parser = argparse.ArgumentParser(description="Translate text in a file.")
+    parser.add_argument("file_path", help="Path to the input file.")
+    parser.add_argument("output_path", help="Path to the output file.")
+    parser.add_argument(
+        "--source-language",
+        required=True,
+        help="Source language code (e.g., 'en' for English).",
+    )
+    parser.add_argument(
+        "--target-language",
+        required=True,
+        help="Target language code (e.g., 'fr' for French).",
+    )
+    parser.add_argument(
+        "--columns-to-translate",
+        nargs="+",
+        help="Columns to translate (e.g., '1 2 3').",
+    )
+
+    args = parser.parse_args()
+    translate_text(
+        args.file_path,
+        args.output_path,
+        args.source_language,
+        args.target_language,
+        args.columns_to_translate,
+    )
+
+
+if __name__ == "__main__":
+    main()
