@@ -28,12 +28,17 @@ def translate_text(
 ):
     ## create dictonary of lists for columns
     df = pd.read_csv(file_path)
+    # Keep only rows where all of the columns in columns_to_translate are <= 1800 characters
+    mask = df[columns_to_translate].apply(lambda x: x.str.len() <= 2000).all(axis=1)
+    df = df[mask]
+    # Reset the index
+    df = df.reset_index(drop=True)
 
     translation_dict = {}
     for column_to_translate in columns_to_translate:
         translation_dict[f"{column_to_translate}_{target_language}"] = []
 
-    for index, row in tqdm.tqdm(df.iterrows()):
+    for index, row in tqdm.tqdm(df.iterrows(), total=df.shape[0]):
         for column_to_translate in columns_to_translate:
             data = {
                 "segments": [{"text": row[column_to_translate]}],
@@ -46,12 +51,9 @@ def translate_text(
             translation_dict[f"{column_to_translate}_{target_language}"].append(
                 response.json()["segments"][0]["text"]
             )
-            print(response.json()["segments"][0]["text"])
-
     translation_df = pd.DataFrame.from_dict(translation_dict)
-    translation_df.to_csv("translation_" + output_path, index=False)
-    df = pd.concat([df, translation_df], axis=1)
-    df.to_csv(output_path, index=False)
+    translation_df = pd.concat([df, translation_df], axis=1)
+    translation_df.to_csv(output_path, index=False)
 
 
 def main():
@@ -87,3 +89,5 @@ def main():
 
 if __name__ == "__main__":
     main()
+
+##  python .\translate_data.py C:\Users\SRU\Desktop\finetune-llm\data\en\guanco_en.csv C:\Users\SRU\Desktop\finetune-llm\data\pl\guanco_pl.csv --source-language en --target-language pl --columns-to-translate text
