@@ -17,7 +17,7 @@ hf_hub_download(
     local_dir=".",
 )
 
-llm = Llama(model_path="./krakowiak-7b.gguf.q4_k_m.bin", rms_norm_eps=1e-5, n_ctx=4096)
+llm = Llama(model_path="./krakowiak-7b.gguf.q4_k_m.bin", rms_norm_eps=1e-5, n_ctx=2048)
 USER_TAG = "### Użytkownik: "
 ASSISTANT_TAG = "### Asystent: "
 # cache = LlamaRAMCache(capacity_bytes=2 << 30)
