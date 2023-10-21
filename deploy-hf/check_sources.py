@@ -2,8 +2,6 @@ from googlesearch import search
 import requests
 from bs4 import BeautifulSoup
 import justext
-
-import html2text
 import re
 
 

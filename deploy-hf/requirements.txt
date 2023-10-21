@@ -1,5 +1,9 @@
 huggingface-hub
 llama-cpp-python
+beautifulsoup4==4.12.2
+google==3.0.0
+justext
+beautifulsoup4==4.12.2
 psutil
 gradio==3.39.0
 
