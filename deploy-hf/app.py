@@ -5,6 +5,7 @@ from gradio.themes.base import Base
 from gradio.themes.utils import colors, fonts, sizes
 import subprocess
 import psutil
+from check_sources import construct_prompt_to_use_source
 
 from huggingface_hub import hf_hub_download
 from llama_cpp import Llama
@@ -16,14 +17,12 @@ hf_hub_download(
     local_dir=".",
 )
 
-llm = Llama(model_path="./krakowiak-7b.gguf.q4_k_m.bin", rms_norm_eps=1e-5, n_ctx=512)
-
+llm = Llama(model_path="./krakowiak-7b.gguf.q4_k_m.bin", rms_norm_eps=1e-5, n_ctx=2048)
+USER_TAG = "### Użytkownik: "
+ASSISTANT_TAG = "### Asystent: "
 # cache = LlamaRAMCache(capacity_bytes=2 << 30)
 
 # llm.set_cache(cache)
-
-
-ins = """### Użytkownik: {} ### Asystent: """
 
 theme = gr.themes.Monochrome(
     primary_hue="orange",
@@ -38,12 +37,18 @@ theme = gr.themes.Monochrome(
     ],
 )
 
+
 def get_system_memory():
     memory = psutil.virtual_memory()
     memory_percent = memory.percent
-    memory_used = memory.used / (1024.0 ** 3)
-    memory_total = memory.total / (1024.0 ** 3)
-    return {"percent": f"{memory_percent}%", "used": f"{memory_used:.3f}GB", "total": f"{memory_total:.3f}GB"}
+    memory_used = memory.used / (1024.0**3)
+    memory_total = memory.total / (1024.0**3)
+    return {
+        "percent": f"{memory_percent}%",
+        "used": f"{memory_used:.3f}GB",
+        "total": f"{memory_total:.3f}GB",
+    }
+
 
 def generate(
     instruction,
@@ -52,11 +57,17 @@ def generate(
     top_p,
     top_k,
     rep_penalty,
+    enable_internet_search,
 ):
+    if enable_internet_search:
+        prompt = construct_prompt_to_use_source(USER_TAG, ASSISTANT_TAG, instruction)
+    else:
+        prompt = f"{USER_TAG} {instruction} {ASSISTANT_TAG}"
+
     result = ""
     for x in llm(
-        ins.format(instruction),
-        stop=["### Asystent:"],
+        prompt,
+        stop=[ASSISTANT_TAG],
         stream=True,
         max_tokens=max_new_tokens,
         temperature=temp,
@@ -160,6 +171,7 @@ with gr.Blocks(theme=seafoam, analytics_enabled=False, css=css) as demo:
                     output = gr.Markdown(elem_id="q-output")
                 with gr.Row():
                     submit = gr.Button("Wyślij", variant="primary")
+                    CHECK_BOX = gr.Checkbox(label="Wyszukaj odpowiedzi internecie! 💾")
 
                 with gr.Accordion(label="Zaawansowane Ustawienia", open=False):
                     MAX_NEW_TOKENS = gr.Slider(
@@ -212,21 +224,35 @@ with gr.Blocks(theme=seafoam, analytics_enabled=False, css=css) as demo:
                 )
                 gr.JSON(get_system_memory, every=1)
 
-
     click = submit.click(
         generate,
-        inputs=[instruction, MAX_NEW_TOKENS, TEMP, TOP_P, TOP_K, REP_PENALTY],
+        inputs=[
+            instruction,
+            MAX_NEW_TOKENS,
+            TEMP,
+            TOP_P,
+            TOP_K,
+            REP_PENALTY,
+            CHECK_BOX,
+        ],
         outputs=[output],
     )
     instruction.submit(
         generate,
-        inputs=[instruction, MAX_NEW_TOKENS, TEMP, TOP_P, TOP_K, REP_PENALTY],
+        inputs=[
+            instruction,
+            MAX_NEW_TOKENS,
+            TEMP,
+            TOP_P,
+            TOP_K,
+            REP_PENALTY,
+            CHECK_BOX,
+        ],
         outputs=[output],
     )
-#demo.queue(concurrency_count=1, max_size=1).launch(debug=True)
+# demo.queue(concurrency_count=1, max_size=1).launch(debug=True)
 
 
 if __name__ == "__main__":
     demo.queue(concurrency_count=1, max_size=1)
     demo.launch(server_name="0.0.0.0", server_port=7860, debug=True)
-
