@@ -64,6 +64,8 @@ def generate(
     else:
         prompt = f"{USER_TAG} {instruction} {ASSISTANT_TAG}"
 
+    print(prompt)
+
     result = ""
     for x in llm(
         prompt,
