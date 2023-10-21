@@ -110,7 +110,7 @@ def get_data_for_llm(query):
         clean_html_documents, word_blacklist
     )
 
-    return clean_html_documents[:12000]
+    return clean_html_documents[:8000]
 
 
 def construct_prompt_to_use_source(USER_TAG, ASSISTANT_TAG, query):

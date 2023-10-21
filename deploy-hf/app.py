@@ -17,7 +17,7 @@ hf_hub_download(
     local_dir=".",
 )
 
-llm = Llama(model_path="./krakowiak-7b.gguf.q4_k_m.bin", rms_norm_eps=1e-5, n_ctx=2048)
+llm = Llama(model_path="./krakowiak-7b.gguf.q4_k_m.bin", rms_norm_eps=1e-5, n_ctx=4096)
 USER_TAG = "### Użytkownik: "
 ASSISTANT_TAG = "### Asystent: "
 # cache = LlamaRAMCache(capacity_bytes=2 << 30)
@@ -171,7 +171,9 @@ with gr.Blocks(theme=seafoam, analytics_enabled=False, css=css) as demo:
                     output = gr.Markdown(elem_id="q-output")
                 with gr.Row():
                     submit = gr.Button("Wyślij", variant="primary")
-                    CHECK_BOX = gr.Checkbox(label="Wyszukaj odpowiedzi internecie! 💾")
+                    CHECK_BOX = gr.Checkbox(
+                        label="🌏 Wyszukaj odpowiedzi internecie! 🌏",
+                    )
 
                 with gr.Accordion(label="Zaawansowane Ustawienia", open=False):
                     MAX_NEW_TOKENS = gr.Slider(
