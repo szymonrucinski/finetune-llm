@@ -1,43 +1,3 @@
-#!/usr/bin/env python
-# coding: utf-8
-
-# #### Before we begin: A note on OOM errors
-# 
-# If you get an error like this: `OutOfMemoryError: CUDA out of memory`, tweak your parameters to make the model less computationally intensive. I will help guide you through that in this guide, and if you have any additional questions you can reach out on the [Discord channel](https://discord.gg/vREMUGyP) or on [X](https://x.com/harperscarroll).
-# 
-# To re-try after you tweak your parameters, open a Terminal ('Launcher' or '+' in the nav bar above -> Other -> Terminal) and run the command `nvidia-smi`. Then find the process ID `PID` under `Processes` and run the command `kill [PID]`. You will need to re-start your notebook from the beginning. (There may be a better way to do this... if so please do let me know!)
-
-# ## Let's begin!
-# I used a GPU and dev environment from [brev.dev](https://brev.dev). Provision a pre-configured GPU in one click [here](https://console.brev.dev/environment/new?instance=A10G:g5.xlarge&name=llama2-7b-finetune) (a single A10G or L4 should be enough for this dataset; anything with >= 24GB GPU Memory. You may need more GPUs and/or Memory if your sequence max_length is larger than 512). Once you've checked out your machine and landed in your instance page, select the specs you'd like (I used **Python 3.10** and CUDA 11.7) and click the "Build" button to build your autogpu container. Give this a few minutes.
-# 
-# A few minutes after your model has started Running, click the 'Notebook' button on the top right of your screen once it illuminates (you may need to refresh the screen). You will be taken to a Jupyter Lab environment, where you can upload this Notebook.
-# 
-# 
-# Note: You can connect your cloud credits (AWS or GCP) by clicking "Org: " on the top right, and in the panel that slides over, click "Connect AWS" or "Connect GCP" under "Connect your cloud" and follow the instructions linked to attach your credentials.
-# 
-# 
-
-# In[1]:
-
-
-# import locale
-# locale.getpreferredencoding = lambda: "UTF-8"
-
-
-# In[2]:
-# In[3]:
-
-
-# ! export CUDA_VISIBLE_DEVICES=0,1
-
-
-# ### 0. Accelerator
-# 
-# Set up the Accelerator. I'm not sure if we really need this for a QLoRA given its [description](https://huggingface.co/docs/accelerate/v0.19.0/en/usage_guides/fsdp) (I have to read more about it) but it seems it can't hurt, and it's helpful to have the code for future reference. You can always comment out the accelerator if you want to try without.
-
-# In[4]:
-
-
 from accelerate import FullyShardedDataParallelPlugin, Accelerator
 from torch.distributed.fsdp.fully_sharded_data_parallel import FullOptimStateDictConfig, FullStateDictConfig
 
@@ -48,26 +8,7 @@ fsdp_plugin = FullyShardedDataParallelPlugin(
 
 accelerator = Accelerator(fsdp_plugin=fsdp_plugin)
 
-
-# ### 1. Load Dataset
-
-# Let's load a meaning representation dataset, and fine-tune Mistral on that. This is a great fine-tuning dataset as it teaches the model a unique form of desired output on which the base model performs poorly out-of-the box, so it's helpful to easily and inexpensively gauge whether the fine-tuned model has learned well. (Sources: [here](https://ragntune.com/blog/gpt3.5-vs-llama2-finetuning) and [here](https://www.anyscale.com/blog/fine-tuning-is-for-form-not-facts)) (In contrast, if you fine-tune on a fact-based dataset, the model may already do quite well on that, and gauging learning is less obvious / may be more computationally expensive.)
-
-# In[5]:
-
-
 from datasets import load_dataset
-
-train_dataset = load_dataset('szymonrucinski/krakowiak-pl', split='train')
-eval_dataset = load_dataset('szymonrucinski/krakowiak-pl', split='validation')
-
-
-# In[6]:
-
-
-print(train_dataset)
-print(eval_dataset)
-
 
 # ### 2. Load Base Model
 
@@ -89,74 +30,12 @@ bnb_config = BitsAndBytesConfig(
 
 model = AutoModelForCausalLM.from_pretrained(base_model_id, quantization_config=bnb_config)
 
-
-# ### 3. Tokenization
-# 
-# Set up the tokenizer. Add padding on the left as it [makes training use less memory](https://ai.stackexchange.com/questions/41485/while-fine-tuning-a-decoder-only-llm-like-llama-on-chat-dataset-what-kind-of-pa).
-# 
-
-# In[8]:
-
-
 tokenizer = AutoTokenizer.from_pretrained(
     base_model_id,
     model_max_length=2048,
-    padding_side="left",
     add_eos_token=True)
 
 tokenizer.pad_token = tokenizer.eos_token
-
-
-# Setup the tokenize function to make labels and input_ids the same. This is basically what [self-supervised fine-tuning is](https://neptune.ai/blog/self-supervised-learning):
-
-# In[9]:
-
-
-def tokenize(prompt):
-    result = tokenizer(
-        prompt,
-        truncation=True,
-        max_length=2048,
-        padding="max_length",
-    )
-    result["labels"] = result["input_ids"].copy()
-    return result
-
-
-# Reformat the prompt and tokenize each sample:
-
-# In[10]:
-
-
-tokenized_train_dataset = tokenize(train_dataset["text"])
-tokenized_val_dataset = tokenize(eval_dataset["text"])
-
-
-# Check that `input_ids` is padded on the left with the `eos_token` (2) and there is an `eos_token` 2 added to the end, and the prompt starts with a `bos_token` (1).
-# 
-
-# Check that a sample has the max length, i.e. 512.
-
-# #### How does the base model do?
-
-# Let's grab a test input (`meaning_representation`) and desired output (`target`) pair to see how the base model does on it.
-
-# In[11]:
-
-
-eval_prompt = """### Użytkownik: Który amerykański polityk jest synem kubańskiego plantatora ananasów?### Asystent:
-"""
-
-
-# In[12]:
-
-
-model_input = tokenizer(eval_prompt, return_tensors="pt").to("cuda")
-
-model.eval()
-with torch.no_grad():
-    print(tokenizer.decode(model.generate(**model_input, max_new_tokens=64, pad_token_id=2)[0], skip_special_tokens=True))
-
 
 # We can see it doesn't do very well out of the box.
 
@@ -194,10 +73,6 @@ def print_trainable_parameters(model):
 # Let's print the model to examine its layers, as we will apply QLoRA to all the linear layers of the model. Those layers are `q_proj`, `k_proj`, `v_proj`, `o_proj`, `gate_proj`, `up_proj`, `down_proj`, and `lm_head`.
 
 # In[15]:
-
-
-print(model)
-
 
 # Here we define the LoRA config.
 # 
@@ -239,13 +114,7 @@ model = accelerator.prepare_model(model)
 
 # See how the model looks different now, with the LoRA adapters added:
 
-# In[17]:
-
-
 print(model)
-
-
-# 
 # Let's use Weights & Biases to track our training metrics. You'll need to apply an API key when prompted. Feel free to skip this if you'd like, and just comment out the `wandb` parameters in the `Trainer` definition below.
 
 # In[18]:
@@ -266,29 +135,15 @@ if len(wandb_project) > 0:
 # 
 # You can interrupt the process via Kernel -> Interrupt Kernel in the top nav bar once you realize you didn't need to train anymore.
 
-# In[19]:
-
 
 if torch.cuda.device_count() > 1: # If more than 1 GPU
     model.is_parallelizable = True
     model.model_parallel = True
 
-
-# In[20]:
-
-
 from trl import SFTTrainer
 
-
-# In[21]:
-
-
-train_dataset = load_dataset("szymonrucinski/krakowiak-pl", split="train")
-val_dataset = load_dataset("szymonrucinski/krakowiak-pl", split="validation")
-
-
-# In[ ]:
-
+train_dataset = load_dataset('szymonrucinski/krakowiak-pl-mistral', split='train')
+val_dataset = load_dataset('szymonrucinski/krakowiak-pl-mistral', split='validation')
 
 import transformers
 from datetime import datetime
@@ -300,11 +155,8 @@ output_dir = "./" + run_name
 
 tokenizer = AutoTokenizer.from_pretrained(
     base_model_id,
-    model_max_length=2048,
-    padding_side="left",
+    model_max_length=3072,
     add_eos_token=True)
-
-tokenizer.pad_token = tokenizer.eos_token
 
 tokenizer.pad_token = tokenizer.eos_token
 
@@ -315,22 +167,21 @@ trainer = SFTTrainer(
     eval_dataset=val_dataset,
     dataset_text_field="text",
     neftune_noise_alpha=2,
-    max_seq_length=2048,
+    max_seq_length=3072,
     args=transformers.TrainingArguments(
         output_dir=output_dir,
-        per_device_train_batch_size=2,
+        per_device_train_batch_size=16,
         gradient_accumulation_steps=2,
-        max_steps=10000,
-        learning_rate=2.5e-5, # Want about 10x smaller than the Mistral learning rate
+        max_steps=3072,
+        learning_rate=2.7e-5, # Want about 10x smaller than the Mistral learning rate
         warmup_steps=100,
         logging_steps=100,
         bf16=True,
         optim="paged_adamw_8bit",
         logging_dir="./logs",        # Directory for storing logs
-        save_strategy="steps",       # Save the model checkpoint every logging step
-        save_steps=250,                # Save checkpoints every 50 steps
+        save_strategy="epoch",       # Save the model checkpoint every logging step
         evaluation_strategy="steps", # Evaluate the model every logging step
-        eval_steps=200,               # Evaluate and save checkpoints every 50 steps
+        eval_steps=250,               # Evaluate and save checkpoints every 50 steps
         do_eval=True,                # Perform evaluation at the end of training
         report_to="wandb",           # Comment this out if you don't want to use weights & baises
         run_name=f"{run_name}-{datetime.now().strftime('%Y-%m-%d-%H-%M')}"          # Name of the W&B run (optional)
@@ -340,52 +191,3 @@ trainer = SFTTrainer(
 
 model.config.use_cache = False  # silence the warnings. Please re-enable for inference!
 trainer.train()
-
-
-# ### 6. Drum Roll... Try the Trained Model!
-# 
-# By default, the PEFT library will only save the QLoRA adapters, so we need to first load the base Mistral model from the Huggingface Hub:
-# 
-
-# In[ ]:
-
-
-base_model = AutoModelForCausalLM.from_pretrained(
-    base_model_id,  # Mistral, same as before
-    quantization_config=bnb_config,  # Same quantization config as before
-    device_map="auto",
-    trust_remote_code=True,
-    use_auth_token=True
-)
-
-tokenizer = AutoTokenizer.from_pretrained(base_model_id, trust_remote_code=True)
-tokenizer.pad_token = tokenizer.eos_token
-
-
-# Now load the QLoRA adapter from the appropriate checkpoint directory, i.e. the best performing model checkpoint:
-
-# In[ ]:
-
-
-from peft import PeftModel
-
-ft_model = PeftModel.from_pretrained(base_model, "mistral-viggo-finetune/checkpoint-1000")
-
-
-# and run your inference!
-
-# Let's try the same `eval_prompt` and thus `model_input` as above, and see if the new finetuned model performs better.
-
-# In[ ]:
-
-
-ft_model.eval()
-with torch.no_grad():
-    print(tokenizer.decode(ft_model.generate(**model_input, max_new_tokens=100, pad_token_id=2)[0], skip_special_tokens=True))
-
-
-# ### Sweet... it worked! The fine-tuned model now understands the meaning representation!
-# 
-# I hope you enjoyed this tutorial on fine-tuning Mistral. If you have any questions, feel free to reach out to me on [X](https://x.com/harperscarroll) or on the [Discord channel](https://discord.gg/vREMUGyP).
-# 
-# 🤙 🤙 🤙 🤙 🤙 🤙 🤙 🤙 🤙 🤙 🤙 🤙 🤙 🤙 🤙 🤙 🤙 🤙 🤙 🤙 🤙 🤙 🤙 🤙 🤙 🤙 🤙 🤙 🤙 🤙 🤙 🤙 🤙 🤙 🤙 🤙 🤙 🤙 🤙 🤙 🤙 🤙 🤙 🤙
