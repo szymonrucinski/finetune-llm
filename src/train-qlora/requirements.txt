@@ -1,4 +1,3 @@
-trl
 bitsandbytes
 transformers @ git+https://github.com/huggingface/transformers.git
 peft @ git+https://github.com/huggingface/peft.git
@@ -7,3 +6,4 @@ trl @ git+https://github.com/huggingface/trl.git
 datasets
 scipy
 ipywidgets
+wandb
