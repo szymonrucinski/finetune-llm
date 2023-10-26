@@ -17,7 +17,7 @@ hf_hub_download(
     local_dir=".",
 )
 
-llm = Llama(model_path="./krakowiak-v2-7b-gguf.Q8_0.bin", rms_norm_eps=1e-5, n_ctx=1024)
+llm = Llama(model_path="./krakowiak-v2-7b-gguf.Q8_0.bin", rms_norm_eps=1e-5, n_ctx=2048)
 USER_TAG = "### Użytkownik: "
 ASSISTANT_TAG = "### Asystent: "
 # cache = LlamaRAMCache(capacity_bytes=2 << 30)
@@ -183,9 +183,9 @@ with gr.Blocks(theme=seafoam, analytics_enabled=False, css=css) as demo:
                     MAX_NEW_TOKENS = gr.Slider(
                         label="Maksymalna liczba nowych tokenów",
                         minimum=64,
-                        maximum=256,
-                        step=16,
-                        value=112,
+                        maximum=512,
+                        step=32,
+                        value=512,
                         interactive=True,
                     )
                     TEMP = gr.Slider(
@@ -193,7 +193,7 @@ with gr.Blocks(theme=seafoam, analytics_enabled=False, css=css) as demo:
                         minimum=0.0,
                         maximum=1.0,
                         step=0.1,
-                        value=0.7,
+                        value=0.8,
                         interactive=True,
                     )
                     TOP_P = gr.Slider(
@@ -217,7 +217,7 @@ with gr.Blocks(theme=seafoam, analytics_enabled=False, css=css) as demo:
                         minimum=1.0,
                         maximum=2.0,
                         step=0.05,
-                        value=1.2,
+                        value=1.1,
                         interactive=True,
                     )
                 gr.Examples(
