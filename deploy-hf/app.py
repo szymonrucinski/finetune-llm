@@ -12,12 +12,12 @@ from llama_cpp import Llama
 from llama_cpp import LlamaRAMCache
 
 hf_hub_download(
-    repo_id="szymonrucinski/krakowiak-7b-gguf",
-    filename="krakowiak-7b.gguf.q4_k_m.bin",
+    repo_id="szymonrucinski/krakowiak-v2-7b-gguf",
+    filename="krakowiak-v2-7b.gguf.Q4_1.bin",
     local_dir=".",
 )
 
-llm = Llama(model_path="./krakowiak-7b.gguf.q4_k_m.bin", rms_norm_eps=1e-5, n_ctx=2048)
+llm = Llama(model_path="./krakowiak-v2-7b.gguf.Q4_1.bin", rms_norm_eps=1e-5, n_ctx=1024)
 USER_TAG = "### Użytkownik: "
 ASSISTANT_TAG = "### Asystent: "
 # cache = LlamaRAMCache(capacity_bytes=2 << 30)
@@ -62,7 +62,8 @@ def generate(
     if enable_internet_search:
         prompt = construct_prompt_to_use_source(USER_TAG, ASSISTANT_TAG, instruction)
     else:
-        prompt = f"{USER_TAG} {instruction} {ASSISTANT_TAG}"
+        # prompt = f"{USER_TAG} {instruction} {ASSISTANT_TAG}"
+        prompt = f"<s>[INST] {instruction} [/INST]"
 
     print(prompt)
 
