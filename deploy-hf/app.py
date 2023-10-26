@@ -157,7 +157,7 @@ with gr.Blocks(theme=seafoam, analytics_enabled=False, css=css) as demo:
             """ ## 🤖 Krakowiak - Polski model językowy 🤖 \n
                 ### by [Szymon Ruciński](https://www.szymonrucinski.pl/) \n
                 Wpisz w poniższe pole i kliknij przycisk, aby wygenerować odpowiedzi na najbardziej nurtujące Cię pytania! 🤗 \n
-                ***W celu zapewnienia optymalnej wydajności korzystasz z modelu o zredukowanej liczbie parametrów.***
+                ***W celu zapewnienia optymalnej wydajności korzystasz z modelu o zredukowanej liczbie parametrów. Jest on 4 razy mniejszy niż oryginalny i generuje odpowiedzi o znacząco niższej jakości.***
             """
         )
 
