@@ -13,11 +13,11 @@ from llama_cpp import LlamaRAMCache
 
 hf_hub_download(
     repo_id="szymonrucinski/krakowiak-v2-7b-gguf",
-    filename="krakowiak-v2-7b-gguf.Q4_1.bin",
+    filename="krakowiak-v2-7b-gguf.Q8_0.bin",
     local_dir=".",
 )
 
-llm = Llama(model_path="./krakowiak-v2-7b-gguf.Q4_1.bin", rms_norm_eps=1e-5, n_ctx=1024)
+llm = Llama(model_path="./krakowiak-v2-7b-gguf.Q8_0.bin", rms_norm_eps=1e-5, n_ctx=1024)
 USER_TAG = "### Użytkownik: "
 ASSISTANT_TAG = "### Asystent: "
 # cache = LlamaRAMCache(capacity_bytes=2 << 30)
