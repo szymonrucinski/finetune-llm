@@ -115,5 +115,5 @@ def get_data_for_llm(query):
 
 def construct_prompt_to_use_source(USER_TAG, ASSISTANT_TAG, query):
     source = get_data_for_llm(query)
-    prompt = f"{USER_TAG} Odpowiedz krótko i zwięźle na następujące pytanie: {query} korzystając tylko z tego tekstu źródłowego: {source}. {ASSISTANT_TAG}"
+    prompt = f"<s>[INST] Odpowiedz krótko i zwięźle na następujące pytanie: {query} korzystając tylko z tego tekstu źródłowego: {source}. [/INST]"
     return prompt
