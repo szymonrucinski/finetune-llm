@@ -1,2 +1,5 @@
 /models/
+/data/
 huggingface-cli
+*.log
+/src/train-qlora/wandb/

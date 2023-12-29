@@ -6,18 +6,6 @@ fsdp_plugin = FullyShardedDataParallelPlugin(
     optim_state_dict_config=FullOptimStateDictConfig(offload_to_cpu=True, rank0_only=False),
 )
 
-import torch
-from transformers import TrainingArguments, Trainer
-
-def compute_metrics(eval_pred):
-    logits, labels = eval_pred
-    labels = labels.reshape(-1)
-    logits = logits.reshape(-1, logits.shape[-1])
-    loss_fct = torch.nn.CrossEntropyLoss(ignore_index=-100)
-    loss = loss_fct(logits, labels)
-    perplexity = torch.exp(loss)
-    return {"perplexity": perplexity.item()}
-
 accelerator = Accelerator(fsdp_plugin=fsdp_plugin)
 
 from datasets import load_dataset
@@ -100,8 +88,8 @@ def print_trainable_parameters(model):
 from peft import LoraConfig, get_peft_model
 
 config = LoraConfig(
-    r=32,
-    lora_alpha=64,
+    r=16,
+    lora_alpha=32,
     target_modules=[
         "q_proj",
         "k_proj",
@@ -154,23 +142,32 @@ if torch.cuda.device_count() > 1: # If more than 1 GPU
 
 from trl import SFTTrainer
 
-train_dataset = load_dataset('szymonrucinski/krakowiak-pl-mistral', split='train')
-val_dataset = load_dataset('szymonrucinski/krakowiak-pl-mistral', split='validation')
+train_dataset = load_dataset('szymonrucinski/pretrain-pl-test', split='train')
+val_dataset = load_dataset('szymonrucinski/pretrain-pl-test', split='validation')
 
 import transformers
 from datetime import datetime
 
-project = "finetune-polish-llms"
+project = "polish-llms-adaptive-pretrain"
 base_model_name = "mistral"
 run_name = base_model_name + "-" + project
 output_dir = "./" + run_name
 
 tokenizer = AutoTokenizer.from_pretrained(
     base_model_id,
-    model_max_length=3072,
+    model_max_length=4,
     add_eos_token=True)
 
 tokenizer.pad_token = tokenizer.eos_token
+
+def compute_metrics(eval_pred):
+    logits, labels = eval_pred
+    labels = labels.reshape(-1)
+    logits = logits.reshape(-1, logits.shape[-1])
+    loss_fct = torch.nn.CrossEntropyLoss(ignore_index=-100)
+    loss = loss_fct(logits, labels)
+    perplexity = torch.exp(loss)
+    return {"perplexity": perplexity.item()}
 
 trainer = SFTTrainer(
     model=model,
@@ -179,13 +176,13 @@ trainer = SFTTrainer(
     eval_dataset=val_dataset,
     dataset_text_field="text",
     neftune_noise_alpha=2,
-    max_seq_length=100000,
+    max_seq_length=4,
     args=transformers.TrainingArguments(
         output_dir=output_dir,
         per_device_train_batch_size=8,
         gradient_accumulation_steps=1,
-        max_steps=3072,
-        learning_rate=2.7e-5, # Want about 10x smaller than the Mistral learning rate
+        max_steps=100000,
+        learning_rate=1e-4, # Want about 10x smaller than the Mistral learning rate
         warmup_steps=100,
         logging_steps=100,
         bf16=True,
@@ -193,11 +190,12 @@ trainer = SFTTrainer(
         logging_dir="./logs",        # Directory for storing logs
         save_strategy="epoch",       # Save the model checkpoint every logging step
         evaluation_strategy="steps", # Evaluate the model every logging step
-        eval_steps=250,               # Evaluate and save checkpoints every 50 steps
+        eval_steps=5,               # Evaluate and save checkpoints every 50 steps
         do_eval=True,                # Perform evaluation at the end of training
         report_to="wandb",           # Comment this out if you don't want to use weights & baises
         run_name=f"{run_name}-{datetime.now().strftime('%Y-%m-%d-%H-%M')}"          # Name of the W&B run (optional)
     ),
+    compute_metrics=compute_metrics,
     data_collator=transformers.DataCollatorForLanguageModeling(tokenizer, mlm=False),
 )
 
