@@ -32,7 +32,7 @@ model = AutoModelForCausalLM.from_pretrained(base_model_id, quantization_config=
 
 tokenizer = AutoTokenizer.from_pretrained(
     base_model_id,
-    model_max_length=2048,
+    model_max_length=512,
     add_eos_token=True)
 
 tokenizer.pad_token = tokenizer.eos_token
@@ -88,8 +88,8 @@ def print_trainable_parameters(model):
 from peft import LoraConfig, get_peft_model
 
 config = LoraConfig(
-    r=16,
-    lora_alpha=32,
+    r=32,
+    lora_alpha=64,
     target_modules=[
         "q_proj",
         "k_proj",
@@ -142,9 +142,8 @@ if torch.cuda.device_count() > 1: # If more than 1 GPU
 
 from trl import SFTTrainer
 
-train_dataset = load_dataset('szymonrucinski/pretrain-pl-test', split='train')
-val_dataset = load_dataset('szymonrucinski/pretrain-pl-test', split='validation')
-
+train_dataset = load_dataset('szymonrucinski/krakowiak-pretrain-pl', split="train")
+val_dataset = load_dataset('szymonrucinski/krakowiak-pretrain-pl', split="validation")
 import transformers
 from datetime import datetime
 
@@ -155,13 +154,21 @@ output_dir = "./" + run_name
 
 tokenizer = AutoTokenizer.from_pretrained(
     base_model_id,
-    model_max_length=4,
+    model_max_length=2048,
+    truncation=True,
     add_eos_token=True)
 
 tokenizer.pad_token = tokenizer.eos_token
 
 def compute_metrics(eval_pred):
     logits, labels = eval_pred
+
+    # Convert logits and labels to PyTorch tensors if they are not already
+    if not isinstance(logits, torch.Tensor):
+        logits = torch.tensor(logits)
+    if not isinstance(labels, torch.Tensor):
+        labels = torch.tensor(labels)
+
     labels = labels.reshape(-1)
     logits = logits.reshape(-1, logits.shape[-1])
     loss_fct = torch.nn.CrossEntropyLoss(ignore_index=-100)
@@ -174,23 +181,23 @@ trainer = SFTTrainer(
     tokenizer=tokenizer,
     train_dataset=train_dataset,
     eval_dataset=val_dataset,
+    max_seq_length=256,
     dataset_text_field="text",
     neftune_noise_alpha=2,
-    max_seq_length=4,
     args=transformers.TrainingArguments(
         output_dir=output_dir,
-        per_device_train_batch_size=8,
+        per_device_train_batch_size=192,
         gradient_accumulation_steps=1,
-        max_steps=100000,
-        learning_rate=1e-4, # Want about 10x smaller than the Mistral learning rate
-        warmup_steps=100,
+        max_steps=100000000000000,
+        learning_rate=2.5e-4, # Want about 10x smaller than the Mistral learning rate
+        warmup_steps=200,
         logging_steps=100,
         bf16=True,
         optim="paged_adamw_8bit",
         logging_dir="./logs",        # Directory for storing logs
         save_strategy="epoch",       # Save the model checkpoint every logging step
         evaluation_strategy="steps", # Evaluate the model every logging step
-        eval_steps=5,               # Evaluate and save checkpoints every 50 steps
+        eval_steps=100,               # Evaluate and save checkpoints every 50 steps
         do_eval=True,                # Perform evaluation at the end of training
         report_to="wandb",           # Comment this out if you don't want to use weights & baises
         run_name=f"{run_name}-{datetime.now().strftime('%Y-%m-%d-%H-%M')}"          # Name of the W&B run (optional)
