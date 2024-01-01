@@ -28,7 +28,7 @@ bnb_config = BitsAndBytesConfig(
     bnb_4bit_compute_dtype=torch.bfloat16
 )
 
-model = AutoModelForCausalLM.from_pretrained(base_model_id, quantization_config=bnb_config)
+model = AutoModelForCausalLM.from_pretrained(base_model_id, quantization_config=bnb_config, device_map='auto')
 
 tokenizer = AutoTokenizer.from_pretrained(
     base_model_id,
@@ -154,7 +154,7 @@ output_dir = "./" + run_name
 
 tokenizer = AutoTokenizer.from_pretrained(
     base_model_id,
-    model_max_length=2048,
+    model_max_length=256,
     truncation=True,
     add_eos_token=True)
 
@@ -203,6 +203,7 @@ trainer = SFTTrainer(
         run_name=f"{run_name}-{datetime.now().strftime('%Y-%m-%d-%H-%M')}"          # Name of the W&B run (optional)
     ),
     compute_metrics=compute_metrics,
+    packing=True,
     data_collator=transformers.DataCollatorForLanguageModeling(tokenizer, mlm=False),
 )
 

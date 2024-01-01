@@ -5,32 +5,37 @@ fsdp_plugin = FullyShardedDataParallelPlugin(
     state_dict_config=FullStateDictConfig(offload_to_cpu=True, rank0_only=False),
     optim_state_dict_config=FullOptimStateDictConfig(offload_to_cpu=True, rank0_only=False),
 )
-
-import torch
-from transformers import TrainingArguments, Trainer
-
-def compute_metrics(eval_pred):
-    logits, labels = eval_pred
-    labels = labels.reshape(-1)
-    logits = logits.reshape(-1, logits.shape[-1])
-    loss_fct = torch.nn.CrossEntropyLoss(ignore_index=-100)
-    loss = loss_fct(logits, labels)
-    perplexity = torch.exp(loss)
-    return {"perplexity": perplexity.item()}
-
-accelerator = Accelerator(fsdp_plugin=fsdp_plugin)
-
+import transformers
 from datasets import load_dataset
-
-# ### 2. Load Base Model
-
-# Let's now load Mistral - `mistralai/Mistral-7B-v0.1` - using 4-bit quantization!
-
-# In[7]:
-
-
 import torch
 from transformers import AutoTokenizer, AutoModelForCausalLM, BitsAndBytesConfig
+from datetime import datetime
+import numpy as np
+
+from transformers import EvalPrediction
+
+# def compute_metrics(eval_pred: EvalPrediction):
+#     logits, labels = eval_pred
+#     logits = torch.from_numpy(logits)  # Convert logits to tensor
+#     labels = torch.from_numpy(labels)  # Convert labels to tensor
+
+#     labels = labels.reshape(-1)
+#     logits = logits.reshape(-1, logits.shape[-1])
+
+#     # Exclude ignored index (if any) from calculations
+#     active_labels = labels != -100
+#     active_logits = logits[active_labels, :]
+#     active_labels = labels[active_labels]
+
+#     # Calculate Cross Entropy Loss
+#     loss_fct = torch.nn.CrossEntropyLoss()
+#     loss = loss_fct(active_logits, active_labels)
+
+#     # Calculate Perplexity
+#     perplexity = torch.exp(loss).item()
+#     return {"perplexity": perplexity}
+
+accelerator = Accelerator(fsdp_plugin=fsdp_plugin)
 
 base_model_id = "mistralai/Mistral-7B-v0.1"
 bnb_config = BitsAndBytesConfig(
@@ -100,8 +105,8 @@ def print_trainable_parameters(model):
 from peft import LoraConfig, get_peft_model
 
 config = LoraConfig(
-    r=32,
-    lora_alpha=64,
+    r=8,
+    lora_alpha=16,
     target_modules=[
         "q_proj",
         "k_proj",
@@ -139,26 +144,23 @@ if len(wandb_project) > 0:
     os.environ["WANDB_PROJECT"] = wandb_project
 
 
-# ### 5. Run Training!
-
-# I used 500 steps, but I found the model should have trained for longer as it had not converged by then, so I upped the steps to 1000 below.
-# 
-# A note on training. You can set the `max_steps` to be high initially, and examine at what step your model's performance starts to degrade. There is where you'll find a sweet spot for how many steps to perform. For example, say you start with 1000 steps, and find that at around 500 steps the model starts overfitting - the validation loss goes up (bad) while the training loss goes down significantly, meaning the model is learning the training set really well, but is unable to generalize to new datapoints. Therefore, 500 steps would be your sweet spot, so you would use the `checkpoint-500` model repo in your output dir (`mistral-finetune-viggo`) as your final model in step 6 below.
-# 
-# You can interrupt the process via Kernel -> Interrupt Kernel in the top nav bar once you realize you didn't need to train anymore.
-
-
 if torch.cuda.device_count() > 1: # If more than 1 GPU
     model.is_parallelizable = True
     model.model_parallel = True
 
 from trl import SFTTrainer
+from  datasets import Dataset
+tokenizer = AutoTokenizer.from_pretrained("mistralai/Mistral-7B-Instruct-v0.1")
+train_dataset = load_dataset('szymonrucinski/krakowiak-instructions', split='train')
+val_dataset = load_dataset('szymonrucinski/krakowiak-instructions', split='validation')
+val_dataset = load_dataset('szymonrucinski/krakowiak-instructions', split='validation')
+val_dataset=val_dataset[:50]
+val_dataset = Dataset.from_dict(val_dataset)
 
-train_dataset = load_dataset('szymonrucinski/krakowiak-pl-mistral', split='train')
-val_dataset = load_dataset('szymonrucinski/krakowiak-pl-mistral', split='validation')
+train_dataset = train_dataset.map(lambda x: {"formatted_chat": tokenizer.apply_chat_template(x["prompt"], tokenize=False, add_generation_prompt=False)})
+val_dataset = val_dataset.map(lambda x: {"formatted_chat": tokenizer.apply_chat_template(x["prompt"], tokenize=False, add_generation_prompt=False)})
+print(val_dataset['formatted_chat'][0])
 
-import transformers
-from datetime import datetime
 
 project = "finetune-polish-llms"
 base_model_name = "mistral"
@@ -167,7 +169,7 @@ output_dir = "./" + run_name
 
 tokenizer = AutoTokenizer.from_pretrained(
     base_model_id,
-    model_max_length=3072,
+    model_max_length=2048,
     add_eos_token=True)
 
 tokenizer.pad_token = tokenizer.eos_token
@@ -177,28 +179,30 @@ trainer = SFTTrainer(
     tokenizer=tokenizer,
     train_dataset=train_dataset,
     eval_dataset=val_dataset,
-    dataset_text_field="text",
+    dataset_text_field="formatted_chat",
     neftune_noise_alpha=2,
-    max_seq_length=100000,
+    max_seq_length=2048,
     args=transformers.TrainingArguments(
         output_dir=output_dir,
         per_device_train_batch_size=8,
+        per_device_eval_batch_size=1,
         gradient_accumulation_steps=1,
-        max_steps=3072,
-        learning_rate=2.7e-5, # Want about 10x smaller than the Mistral learning rate
-        warmup_steps=100,
+        max_steps=100000,
+        learning_rate=2.5e-5, # Want about 10x smaller than the Mistral learning rate
+        warmup_steps=200,
         logging_steps=100,
         bf16=True,
         optim="paged_adamw_8bit",
         logging_dir="./logs",        # Directory for storing logs
         save_strategy="epoch",       # Save the model checkpoint every logging step
         evaluation_strategy="steps", # Evaluate the model every logging step
-        eval_steps=250,               # Evaluate and save checkpoints every 50 steps
+        eval_steps=100,               # Evaluate and save checkpoints every 50 steps
         do_eval=True,                # Perform evaluation at the end of training
         report_to="wandb",           # Comment this out if you don't want to use weights & baises
         run_name=f"{run_name}-{datetime.now().strftime('%Y-%m-%d-%H-%M')}"          # Name of the W&B run (optional)
     ),
     data_collator=transformers.DataCollatorForLanguageModeling(tokenizer, mlm=False),
+    # compute_metrics=compute_metrics
 )
 
 model.config.use_cache = False  # silence the warnings. Please re-enable for inference!
