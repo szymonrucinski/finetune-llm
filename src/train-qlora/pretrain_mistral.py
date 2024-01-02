@@ -189,7 +189,7 @@ trainer = SFTTrainer(
         per_device_train_batch_size=192,
         gradient_accumulation_steps=1,
         max_steps=100000000000000,
-        learning_rate=2.5e-4, # Want about 10x smaller than the Mistral learning rate
+        learning_rate=2.5e-5, # Want about 10x smaller than the Mistral learning rate
         warmup_steps=200,
         logging_steps=100,
         bf16=True,
@@ -203,7 +203,7 @@ trainer = SFTTrainer(
         run_name=f"{run_name}-{datetime.now().strftime('%Y-%m-%d-%H-%M')}"          # Name of the W&B run (optional)
     ),
     compute_metrics=compute_metrics,
-    packing=True,
+    # packing=True,
     data_collator=transformers.DataCollatorForLanguageModeling(tokenizer, mlm=False),
 )
 
