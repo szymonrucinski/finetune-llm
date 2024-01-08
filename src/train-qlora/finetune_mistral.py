@@ -170,8 +170,8 @@ output_dir = "./" + run_name
 tokenizer = AutoTokenizer.from_pretrained(
     base_model_id,
     model_max_length=2048,
-    truncation=True,
-    padding=True,
+    # truncation=True,
+    # padding=True,
     add_eos_token=True)
 
 tokenizer.pad_token = tokenizer.eos_token
@@ -185,7 +185,7 @@ trainer = SFTTrainer(
     neftune_noise_alpha=2,
     args=transformers.TrainingArguments(
         output_dir=output_dir,
-        per_device_train_batch_size=8,
+        per_device_train_batch_size=32,
         per_device_eval_batch_size=1,
         gradient_accumulation_steps=1,
         max_steps=100000,
