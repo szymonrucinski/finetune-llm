@@ -170,6 +170,7 @@ output_dir = "./" + run_name
 tokenizer = AutoTokenizer.from_pretrained(
     base_model_id,
     model_max_length=2048,
+    truncation=True,
     add_eos_token=True)
 
 tokenizer.pad_token = tokenizer.eos_token
@@ -181,7 +182,6 @@ trainer = SFTTrainer(
     eval_dataset=val_dataset,
     dataset_text_field="formatted_chat",
     neftune_noise_alpha=2,
-    max_seq_length=2048,
     args=transformers.TrainingArguments(
         output_dir=output_dir,
         per_device_train_batch_size=8,
