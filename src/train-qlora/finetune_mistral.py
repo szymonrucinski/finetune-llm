@@ -171,7 +171,7 @@ tokenizer = AutoTokenizer.from_pretrained(
     base_model_id,
     model_max_length=2048,
     truncation=True,
-    padding=False,
+    padding=True,
     add_eos_token=True)
 
 tokenizer.pad_token = tokenizer.eos_token
