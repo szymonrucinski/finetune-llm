@@ -27,13 +27,12 @@ fsdp_plugin = FullyShardedDataParallelPlugin(
         offload_to_cpu=True, rank0_only=False
     ),
 )
-challenge_name = "klej_psc"
+challenge_name = "klej_dyk"
 base_file_path = f"./klej_data/{challenge_name}"
 wandb.init(
     project="klej-benchmark-lodzianin",
     name=challenge_name,
 )
-
 
 model_id = "Azurro/APT-1B-Base"
 
@@ -109,16 +108,14 @@ print(klej_psc_dataset["test"])
 
 tokenizer.pad_token_id = tokenizer.eos_token_id
 tokenizer.pad_token = tokenizer.eos_token
-special_tokens_dict = {"additional_special_tokens": ["[TEXT]", "[SUMMARY]"]}
+special_tokens_dict = {"additional_special_tokens": ["[QUESTION]", "[ANSWER]"]}
 num_added_toks = tokenizer.add_special_tokens(special_tokens_dict)
 model.resize_token_embeddings(len(tokenizer))
 
 
 def preprocess_dataset(dataset, col_to_delete, col_to_rename, new_col_name):
     dataset = dataset.map(
-        lambda x: {
-            "text": "[TEXT]" + x["extract_text"] + "[SUMMARY]" + x["summary_text"]
-        }
+        lambda x: {"text": "[QUESTION]" + x["question"] + "[ANSWER]" + x["answer"]}
     )
 
     def mistral_preprocessing_function(examples):
@@ -128,6 +125,10 @@ def preprocess_dataset(dataset, col_to_delete, col_to_rename, new_col_name):
     dataset = dataset.map(
         mistral_preprocessing_function, batched=True, remove_columns=col_to_delete
     )
+    try:
+        dataset = dataset.rename_column(col_to_rename, new_col_name)
+    except:
+        return dataset
     dataset.set_format("torch")
 
     return dataset
@@ -135,21 +136,21 @@ def preprocess_dataset(dataset, col_to_delete, col_to_rename, new_col_name):
 
 # Usage of the function
 klej_psc_dataset["train"] = preprocess_dataset(
-    klej_psc_dataset["train"], ["extract_text", "summary_text"], "extract_text", "text"
+    klej_psc_dataset["train"], ["question", "answer", "q_id"], "target", "labels"
 )
 
 klej_psc_dataset["validation"] = preprocess_dataset(
     klej_psc_dataset["validation"],
-    ["extract_text", "summary_text"],
-    "extract_text",
-    "text",
+    ["question", "answer", "q_id"],
+    "target",
+    "labels",
 )
 
 klej_psc_dataset["test"] = preprocess_dataset(
     klej_psc_dataset["test"],
-    ["extract_text", "summary_text"],
-    "extract_text",
-    "text",
+    ["question", "answer", "q_id"],
+    "target",
+    "labels",
 )
 
 # Data collator for padding a batch of examples to the maximum length seen in the batch

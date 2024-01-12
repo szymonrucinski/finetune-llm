@@ -3,7 +3,6 @@ from transformers import (
     AutoTokenizer,
     AutoModelForSequenceClassification,
     TrainingArguments,
-    DataCollatorWithPadding,
     Trainer,
     EarlyStoppingCallback,
 )
@@ -27,7 +26,7 @@ fsdp_plugin = FullyShardedDataParallelPlugin(
         offload_to_cpu=True, rank0_only=False
     ),
 )
-challenge_name = "klej_psc"
+challenge_name = "klej_cdsc-e"
 base_file_path = f"./klej_data/{challenge_name}"
 wandb.init(
     project="klej-benchmark-lodzianin",
@@ -37,8 +36,6 @@ wandb.init(
 
 model_id = "Azurro/APT-1B-Base"
 
-id2label = {0: "0", 1: "1"}
-label2id = {"0": 0, "1": 1}
 
 tokenizer = AutoTokenizer.from_pretrained(
     model_id, max_model_length=2, padding=True, concatenate=True
@@ -109,15 +106,21 @@ print(klej_psc_dataset["test"])
 
 tokenizer.pad_token_id = tokenizer.eos_token_id
 tokenizer.pad_token = tokenizer.eos_token
-special_tokens_dict = {"additional_special_tokens": ["[TEXT]", "[SUMMARY]"]}
+special_tokens_dict = {"additional_special_tokens": ["[SENTENCE_A]", "[SENTENCE_B]"]}
 num_added_toks = tokenizer.add_special_tokens(special_tokens_dict)
 model.resize_token_embeddings(len(tokenizer))
+
+
+labels = list(set(df_train["entailment_judgment"].to_list()))
+ids = [i for i, e in enumerate(labels)]
+id2label = dict(zip(ids, labels))
+label2id = dict(zip(labels, ids))
 
 
 def preprocess_dataset(dataset, col_to_delete, col_to_rename, new_col_name):
     dataset = dataset.map(
         lambda x: {
-            "text": "[TEXT]" + x["extract_text"] + "[SUMMARY]" + x["summary_text"]
+            "text": "[SENTENCE_A]" + x["sentence_A"] + "[SENTENCE_B]" + x["sentence_B"]
         }
     )
 
@@ -125,35 +128,48 @@ def preprocess_dataset(dataset, col_to_delete, col_to_rename, new_col_name):
         return tokenizer(examples["text"], truncation=True, max_length=16)
 
     # Apply preprocessing function and remove specified columns
-    dataset = dataset.map(
-        mistral_preprocessing_function, batched=True, remove_columns=col_to_delete
-    )
-    dataset.set_format("torch")
-
+    # Apply preprocessing function and remove specified columns
+    dataset = dataset.map(mistral_preprocessing_function, remove_columns=col_to_delete)
+    try:
+        dataset = dataset.rename_column(col_to_rename, new_col_name)
+    except:
+        print("no_col")
+        return dataset
     return dataset
 
 
 # Usage of the function
 klej_psc_dataset["train"] = preprocess_dataset(
-    klej_psc_dataset["train"], ["extract_text", "summary_text"], "extract_text", "text"
+    klej_psc_dataset["train"],
+    ["sentence_A", "sentence_B", "pair_ID"],
+    "entailment_judgment",
+    "labels",
 )
 
 klej_psc_dataset["validation"] = preprocess_dataset(
     klej_psc_dataset["validation"],
-    ["extract_text", "summary_text"],
-    "extract_text",
-    "text",
+    ["sentence_A", "sentence_B", "pair_ID"],
+    "entailment_judgment",
+    "labels",
 )
 
 klej_psc_dataset["test"] = preprocess_dataset(
     klej_psc_dataset["test"],
-    ["extract_text", "summary_text"],
-    "extract_text",
-    "text",
+    ["sentence_A", "sentence_B", "pair_ID"],
+    "entailment_judgment",
+    "labels",
 )
+print(klej_psc_dataset["train"])
 
-# Data collator for padding a batch of examples to the maximum length seen in the batch
-mistral_data_collator = DataCollatorWithPadding(tokenizer=tokenizer)
+
+def map_labels_to_ids(example):
+    example["labels"] = label2id[example["labels"]]
+    return example
+
+
+klej_psc_dataset["train"] = klej_psc_dataset["train"].map(map_labels_to_ids)
+klej_psc_dataset["validation"] = klej_psc_dataset["validation"].map(map_labels_to_ids)
+
 
 from sklearn.metrics import accuracy_score, f1_score
 
@@ -168,14 +184,6 @@ def compute_metrics(eval_pred):
     }
 
 
-# tokenized_klej_psc_dataset = klej_psc_dataset["train"].map(
-#     preprocess_function, batched=False
-# )
-
-# tokenized_klej_psc_val_dataset = klej_psc_dataset["validation"].map(
-#     preprocess_function, batched=False
-# )
-
 training_args = TrainingArguments(
     output_dir="my_awesome_model",
     learning_rate=2.5e-5,
@@ -189,22 +197,12 @@ training_args = TrainingArguments(
     push_to_hub=True,
     metric_for_best_model="eval_f1",
 )
-# klej_psc_dataset["train"] = klej_psc_dataset["train"].map(
-#     lambda x: {"extract_text": x["extract_text"] + x["summary_text"]}
-# )
-# klej_psc_dataset["validation"] = klej_psc_dataset["validation"].map(
-#     lambda x: {"extract_text": x["extract_text"] + x["summary_text"]}
-# )
-# klej_psc_dataset["train"] = klej_psc_dataset["train"].remove_columns(["summary_text"])
-# klej_psc_dataset["validation"] = klej_psc_dataset["validation"].remove_columns(
-#     ["summary_text"]
-# )
 
 print(klej_psc_dataset["train"][0])
 
 trainer = Trainer(
     model=model,
-    tokenizer=tokenizer,
+    # tokenizer=tokenizer,
     args=training_args,
     train_dataset=klej_psc_dataset["train"],
     eval_dataset=klej_psc_dataset["validation"],
