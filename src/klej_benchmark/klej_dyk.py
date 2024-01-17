@@ -3,30 +3,29 @@ from transformers import (
     AutoTokenizer,
     AutoModelForSequenceClassification,
     TrainingArguments,
-    DataCollatorWithPadding,
     Trainer,
     EarlyStoppingCallback,
 )
-from peft import prepare_model_for_kbit_training
-from accelerate import Accelerator, FullyShardedDataParallelPlugin
-from torch.distributed.fsdp.fully_sharded_data_parallel import (
-    FullOptimStateDictConfig,
-    FullStateDictConfig,
-)
-import pandas as pd
+from sklearn.model_selection import train_test_split
+from collections import Counter
 import numpy as np
+
+from peft import prepare_model_for_kbit_training
+import pandas as pd
+import torch.nn.functional as F
+from sklearn.metrics import accuracy_score, f1_score, roc_auc_score, precision_score
+from datasets import Dataset as HF_Dataset
+import pandas as pd
+import torch
+from torch.utils.data import Dataset, DataLoader
+import numpy as np
+import torch
 
 from sklearn.model_selection import train_test_split
 import wandb
 from peft import LoraConfig, get_peft_model
 
 
-fsdp_plugin = FullyShardedDataParallelPlugin(
-    state_dict_config=FullStateDictConfig(offload_to_cpu=True, rank0_only=False),
-    optim_state_dict_config=FullOptimStateDictConfig(
-        offload_to_cpu=True, rank0_only=False
-    ),
-)
 challenge_name = "klej_dyk"
 base_file_path = f"./klej_data/{challenge_name}"
 wandb.init(
@@ -34,203 +33,226 @@ wandb.init(
     name=challenge_name,
 )
 
-model_id = "Azurro/APT-1B-Base"
 
-id2label = {0: "0", 1: "1"}
-label2id = {"0": 0, "1": 1}
+model_id = "Azurro/APT3-1B-Base"
+max_len = 1024
 
 tokenizer = AutoTokenizer.from_pretrained(
-    model_id, max_model_length=2, padding=True, concatenate=True
+    model_id, model_max_length=max_len, truncation=True
 )
+tokenizer.pad_token_id = tokenizer.eos_token_id
+tokenizer.pad_token = tokenizer.eos_token
+
 model = AutoModelForSequenceClassification.from_pretrained(
-    model_id, num_labels=2, id2label=id2label, label2id=label2id
+    model_id, num_labels=2, problem_type="multi_class_classification"
 )
+model.config.pad_token_id = model.config.eos_token_id
 
 model.gradient_checkpointing_enable()
 model = prepare_model_for_kbit_training(model)
 
 
 config = LoraConfig(
-    r=8,
+    r=2,
     lora_alpha=16,
     target_modules=[
         "q_proj",
-        "k_proj",
         "v_proj",
-        "o_proj",
-        "gate_proj",
-        "up_proj",
-        "down_proj",
-        "lm_head",
     ],
     bias="none",
-    lora_dropout=0.05,  # Conventional
+    lora_dropout=0.1,  # Conventional
     task_type="SEQ_CLS",
 )
 
 model = get_peft_model(model, config)
-accelerator = Accelerator(fsdp_plugin=fsdp_plugin)
-model = accelerator.prepare_model(model)
-
-tsv_train_file_path = base_file_path + "/train.tsv"
-train_file_path = base_file_path + "/train.csv"
-tsv_test_file_path = base_file_path + "/test_features.tsv"
-test_file_path = base_file_path + "/test_features.csv"
+print(model.print_trainable_parameters())
 
 # Read the TSV file
-df_train = pd.read_csv(tsv_train_file_path, sep="\t")
-df_train.to_csv(train_file_path, index=False)
-df_test = pd.read_csv(tsv_test_file_path, sep="\t")
-df_test.to_csv(test_file_path, index=False)
+df_train = pd.read_csv(base_file_path + "/train.tsv", sep="\t")
+df_test = pd.read_csv(base_file_path + "/test_features.tsv", sep="\t")
+df_val = pd.read_csv(base_file_path + "/dev.tsv", sep="\t")
+print(len(df_test))
+print(len(df_train["target"].unique()))
 
-train_df, val_df = train_test_split(df_train, test_size=0.2)  # 20% for validation
-my_train_file_path = base_file_path + "/my_train.csv"
-my_val_file_path = base_file_path + "/my_val.csv"
-train_df.to_csv(my_train_file_path, index=False)
-val_df.to_csv(my_val_file_path, index=False)
-
-
-# Load the datasets
-klej_psc_train = load_dataset("csv", data_files=my_train_file_path, split="train")
-klej_psc_val = load_dataset("csv", data_files=my_val_file_path, split="train")
-klej_psc_test = load_dataset("csv", data_files=test_file_path, split="train")
+# df_train, df_val = train_test_split(
+#     df_train,
+#     test_size=0.1,
+#     random_state=42,
+#     stratify=df_train["target"],
+# )  # 20% for validation
 
 
-# Combine them into a single DatasetDict
-klej_psc_dataset = DatasetDict(
-    {"train": klej_psc_train, "test": klej_psc_test, "validation": klej_psc_val}
-)
-print(klej_psc_dataset["train"])
-print(klej_psc_dataset["validation"])
-print(klej_psc_dataset["test"])
-
-# Load Mistral 7B Tokenizer
-
-tokenizer.pad_token_id = tokenizer.eos_token_id
-tokenizer.pad_token = tokenizer.eos_token
-special_tokens_dict = {"additional_special_tokens": ["[QUESTION]", "[ANSWER]"]}
-num_added_toks = tokenizer.add_special_tokens(special_tokens_dict)
-model.resize_token_embeddings(len(tokenizer))
+labels = list(set(df_train["target"].to_list()))
+ids = [i for i, e in enumerate(labels)]
+id2label = dict(zip(ids, labels))
+label2id = dict(zip(labels, ids))
 
 
-def preprocess_dataset(dataset, col_to_delete, col_to_rename, new_col_name):
-    dataset = dataset.map(
-        lambda x: {"text": "[QUESTION]" + x["question"] + "[ANSWER]" + x["answer"]}
-    )
+# Custom Dataset
+class TextDataset(Dataset):
+    def __init__(self, dataframe, tokenizer, id2label, label2id, isTest=False):
+        self.dataframe = dataframe
+        self.tokenizer = tokenizer
+        self.label2id = label2id
+        self.id2label = id2label
+        self.isTest = isTest
+        self.max_len = max_len
 
-    def mistral_preprocessing_function(examples):
-        return tokenizer(examples["text"], truncation=True, max_length=16)
+    def __len__(self):
+        return len(self.dataframe)
 
-    # Apply preprocessing function and remove specified columns
-    dataset = dataset.map(
-        mistral_preprocessing_function, batched=True, remove_columns=col_to_delete
-    )
-    try:
-        dataset = dataset.rename_column(col_to_rename, new_col_name)
-    except:
-        return dataset
-    dataset.set_format("torch")
+    def __getitem__(self, idx):
+        if self.isTest is False:
+            text = (
+                "[Pytanie]: "
+                + self.dataframe.iloc[idx]["question"]
+                + " [Odpowiedź]: "
+                + self.dataframe.iloc[idx]["answer"]
+            )
+            inputs = self.tokenizer(text, max_length=self.max_len, truncation=True)
+            label = label2id[self.dataframe.iloc[idx]["target"]]
+            return {"input_ids": inputs["input_ids"], "label": label}
+        else:
+            text = (
+                "[Pytanie]: "
+                + self.dataframe.iloc[idx]["question"]
+                + " [Odpowiedź]: "
+                + self.dataframe.iloc[idx]["answer"]
+            )
+            inputs = self.tokenizer(text, max_length=self.max_len, truncation=True)
+            return {"input_ids": inputs["input_ids"]}
 
-    return dataset
+
+train_dataset = TextDataset(df_train, tokenizer, id2label, label2id)
+val_dataset = TextDataset(df_val, tokenizer, id2label, label2id)
+test_dataset = TextDataset(df_test, tokenizer, id2label, label2id, isTest=True)
 
 
-# Usage of the function
-klej_psc_dataset["train"] = preprocess_dataset(
-    klej_psc_dataset["train"], ["question", "answer", "q_id"], "target", "labels"
-)
+# Create datasets
+def convert_to_hf(pytorch_dataset, isTest=False):
+    if isTest is True:
+        hf_data = {"input_ids": []}
+        for item in pytorch_dataset:
+            hf_data["input_ids"].append(item["input_ids"])
+        return HF_Dataset.from_dict(hf_data)
+    else:
+        hf_data = {"input_ids": [], "label": []}
+        for item in pytorch_dataset:
+            hf_data["input_ids"].append(item["input_ids"])
+            hf_data["label"].append(item["label"])
+        return HF_Dataset.from_dict(hf_data)
 
-klej_psc_dataset["validation"] = preprocess_dataset(
-    klej_psc_dataset["validation"],
-    ["question", "answer", "q_id"],
-    "target",
-    "labels",
-)
 
-klej_psc_dataset["test"] = preprocess_dataset(
-    klej_psc_dataset["test"],
-    ["question", "answer", "q_id"],
-    "target",
-    "labels",
-)
+train_dataset = convert_to_hf(train_dataset)
+val_dataset = convert_to_hf(val_dataset)
+test_dataset = convert_to_hf(test_dataset, isTest=True)
 
-# Data collator for padding a batch of examples to the maximum length seen in the batch
-mistral_data_collator = DataCollatorWithPadding(tokenizer=tokenizer)
+print(len(train_dataset), len(val_dataset), len(test_dataset))
 
-from sklearn.metrics import accuracy_score, f1_score
+
+def get_weights(train_dataset):
+    # Convert to pandas DataFrame and count label occurrences
+    label_counts = train_dataset.to_pandas()["label"].value_counts()
+    label_count_dict = label_counts.to_dict()
+    sorted_dict = {key: label_count_dict[key] for key in sorted(label_count_dict)}
+    weights = [(len(train_dataset)) / (2 * i) for i in sorted_dict.values()]
+    print("get weights", weights)
+    return weights
+
+
+class_weights = get_weights(train_dataset)
 
 
 def compute_metrics(eval_pred):
     logits, labels = eval_pred
+    # Convert logits to probabilities
+    probabilities = F.softmax(torch.from_numpy(logits), dim=1).numpy()
+
+    # Predictions are the class with the highest probability
     predictions = np.argmax(logits, axis=1)
-    print(labels, predictions)
-    return {
-        "accuracy": accuracy_score(predictions, labels),
-        "f1": f1_score(predictions, labels, average="macro"),
-    }
+
+    # Calculate metrics
+    accuracy = accuracy_score(labels, predictions)
+    f1 = f1_score(labels, predictions, average="macro")
+
+    # Calculate ROC AUC for each class and average
+    # Note: This requires one-hot encoding of the labels
+    num_classes = probabilities.shape[1]
+    one_hot_labels = np.eye(num_classes)[labels]
+
+    # Calculate ROC AUC per class and average
+    auroc = roc_auc_score(
+        one_hot_labels, probabilities, multi_class="ovr", average="macro"
+    )
+
+    precision = precision_score(labels, predictions, average="macro")
+
+    return {"accuracy": accuracy, "f1": f1, "auroc": auroc, "precision": precision}
 
 
-# tokenized_klej_psc_dataset = klej_psc_dataset["train"].map(
-#     preprocess_function, batched=False
-# )
+class WeightedCELossTrainer(Trainer):
+    def compute_loss(self, model, inputs, return_outputs=False):
+        labels = inputs.pop("labels")
+        # Get model's predictions
+        outputs = model(**inputs)
+        logits = outputs.get("logits")
+        # Compute custom loss
+        loss_fct = torch.nn.CrossEntropyLoss(
+            weight=torch.tensor(class_weights, device=model.device, dtype=logits.dtype)
+        )
+        loss = loss_fct(logits.view(-1, self.model.config.num_labels), labels.view(-1))
+        return (loss, outputs) if return_outputs else loss
 
-# tokenized_klej_psc_val_dataset = klej_psc_dataset["validation"].map(
-#     preprocess_function, batched=False
-# )
 
 training_args = TrainingArguments(
-    output_dir="my_awesome_model",
-    learning_rate=2.5e-5,
+    output_dir="models/klej_dyk",
+    learning_rate=1e-4,
+    lr_scheduler_type="constant",
+    warmup_ratio=0.1,
+    max_grad_norm=0.3,
     per_device_train_batch_size=8,
     per_device_eval_batch_size=2,
-    num_train_epochs=10,
-    weight_decay=0.01,
+    num_train_epochs=5,
+    weight_decay=0.001,
     evaluation_strategy="epoch",
     save_strategy="epoch",
     load_best_model_at_end=True,
-    push_to_hub=True,
-    metric_for_best_model="eval_f1",
+    metric_for_best_model="eval_precision",
+    remove_unused_columns=False,
+    bf16=True,
 )
-# klej_psc_dataset["train"] = klej_psc_dataset["train"].map(
-#     lambda x: {"extract_text": x["extract_text"] + x["summary_text"]}
-# )
-# klej_psc_dataset["validation"] = klej_psc_dataset["validation"].map(
-#     lambda x: {"extract_text": x["extract_text"] + x["summary_text"]}
-# )
-# klej_psc_dataset["train"] = klej_psc_dataset["train"].remove_columns(["summary_text"])
-# klej_psc_dataset["validation"] = klej_psc_dataset["validation"].remove_columns(
-#     ["summary_text"]
-# )
+device = "cuda" if torch.cuda.is_available() else "cpu"
 
-print(klej_psc_dataset["train"][0])
+model = model.to(device)
 
-trainer = Trainer(
+trainer = WeightedCELossTrainer(
     model=model,
     tokenizer=tokenizer,
+    train_dataset=train_dataset,
+    eval_dataset=val_dataset,
     args=training_args,
-    train_dataset=klej_psc_dataset["train"],
-    eval_dataset=klej_psc_dataset["validation"],
     compute_metrics=compute_metrics,
     callbacks=[EarlyStoppingCallback(early_stopping_patience=3)],
 )
 
+
 trainer.train()
 
-print(klej_psc_dataset["validation"])
-predictions = trainer.predict(klej_psc_dataset["test"])
+
+### TEST ###
+predictions = trainer.predict(test_dataset)
 predicted_labels = np.argmax(predictions.predictions, axis=1)
-# Create a DataFrame with the original test data and the predicted labels
+
 result_df = df_test.copy()
-result_df["label"] = predicted_labels
+result_df["target"] = predicted_labels
 # Convert the predicted labels from ids to actual labels
-result_df["label"] = result_df["label"].map(id2label)
-
+result_df["target"] = result_df["target"].map(id2label)
+print(result_df)
 # Save the results to a CSV file
-result_file_path = base_file_path + f"test_pred_{challenge_name}.tsv"
-result_df.to_csv(result_file_path, index=False, sep="\t")
+result_file_path = base_file_path + "/test_pred_polemo2.0-in.tsv"
+print(result_file_path)
+result_df["target"].to_csv(result_file_path, index=False, sep="\t")
 
-
-artifact = wandb.Artifact("test_results", type="result")
+artifact = wandb.Artifact("test_pred_polemo2.0-in", type="result")
 artifact.add_file(result_file_path)
-
-# Log the artifact to wandb
 wandb.log_artifact(artifact)

@@ -1,37 +1,31 @@
-from transformers import AutoTokenizer, AutoModelForCausalLM, AutoTokenizer
-from accelerate import FullyShardedDataParallelPlugin
-from torch.distributed.fsdp.fully_sharded_data_parallel import (
-    FullOptimStateDictConfig,
-    FullStateDictConfig,
+from datasets import load_dataset, DatasetDict
+from transformers import (
+    AutoTokenizer,
+    AutoModelForSequenceClassification,
+    TrainingArguments,
+    Trainer,
+    EarlyStoppingCallback,
 )
-from tqdm import tqdm
-from peft import LoraConfig, get_peft_model
-from peft import prepare_model_for_kbit_training
-from accelerate import Accelerator, FullyShardedDataParallelPlugin
-from torch.distributed.fsdp.fully_sharded_data_parallel import (
-    FullOptimStateDictConfig,
-    FullStateDictConfig,
-)
-import bitsandbytes as bnb
+from sklearn.model_selection import train_test_split
+from collections import Counter
+import numpy as np
 
-from torch.utils.data import DataLoader
+from peft import prepare_model_for_kbit_training
+import pandas as pd
+import torch.nn.functional as F
+from sklearn.metrics import accuracy_score, f1_score, roc_auc_score, precision_score
+from datasets import Dataset as HF_Dataset
 import pandas as pd
 import torch
-from sklearn.metrics import mean_squared_error, r2_score
-from torch.utils.data import Dataset
+from torch.utils.data import Dataset, DataLoader
+import numpy as np
+import torch
 
+from sklearn.model_selection import train_test_split
 import wandb
-import torch.nn as nn
-
-device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+from peft import LoraConfig, get_peft_model
 
 
-fsdp_plugin = FullyShardedDataParallelPlugin(
-    state_dict_config=FullStateDictConfig(offload_to_cpu=True, rank0_only=False),
-    optim_state_dict_config=FullOptimStateDictConfig(
-        offload_to_cpu=True, rank0_only=False
-    ),
-)
 challenge_name = "klej_cdsc-r"
 base_file_path = f"./klej_data/{challenge_name}"
 wandb.init(
@@ -39,224 +33,217 @@ wandb.init(
     name=challenge_name,
 )
 
-tsv_train_file_path = base_file_path + "/train.tsv"
-train_file_path = base_file_path + "/train.csv"
-tsv_test_file_path = base_file_path + "/test_features.tsv"
-test_file_path = base_file_path + "/test_features.csv"
-tsv_val_file_path = base_file_path + "/dev.tsv"
-val_file_path = base_file_path + "/dev.csv"
 
+model_id = "Azurro/APT3-1B-Base"
+max_len = 1024
 
-# Read the TSV file
-df_train = pd.read_csv(tsv_train_file_path, sep="\t")
-df_train.to_csv(train_file_path, index=False)
-df_test = pd.read_csv(tsv_test_file_path, sep="\t")
-df_test.to_csv(test_file_path, index=False)
-df_val = pd.read_csv(tsv_val_file_path, sep="\t")
-df_val.to_csv(val_file_path, index=False)
-
-model_name = "Azurro/APT-1B-Base"
-tokenizer = AutoTokenizer.from_pretrained(model_name)
+tokenizer = AutoTokenizer.from_pretrained(
+    model_id, model_max_length=max_len, truncation=True
+)
 tokenizer.pad_token_id = tokenizer.eos_token_id
 tokenizer.pad_token = tokenizer.eos_token
-Lodzianin_Model = AutoModelForCausalLM.from_pretrained(model_name)
 
+model = AutoModelForSequenceClassification.from_pretrained(
+    model_id, num_labels=1, problem_type="regression"
+)
+model.config.pad_token_id = model.config.eos_token_id
 
-class RelatednessDataset(Dataset):
-    def __init__(self, filename, tokenizer, max_length=2):
-        self.df = pd.read_csv(filename)
-        self.tokenizer = tokenizer
-        self.max_length = max_length
-
-    def __len__(self):
-        return len(self.df)
-
-    def __getitem__(self, idx):
-        sentence_a = self.df.iloc[idx]["sentence_A"]
-        sentence_b = self.df.iloc[idx]["sentence_B"]
-        score = float(self.df.iloc[idx]["relatedness_score"]) / 5
-
-        # Encode sentences
-        encoded_pair = self.tokenizer.encode_plus(
-            sentence_a,
-            sentence_b,
-            max_length=self.max_length,
-            padding="max_length",
-            truncation=True,
-            return_tensors="pt",
-        )
-
-        return {
-            "input_ids": encoded_pair["input_ids"].flatten(),
-            "attention_mask": encoded_pair["attention_mask"].flatten(),
-            "labels": torch.tensor(score, dtype=torch.float),
-        }
-
-
-class TestRelatednessDataset(Dataset):
-    def __init__(self, filename, tokenizer, max_length=32):
-        self.df = pd.read_csv(filename)
-        self.tokenizer = tokenizer
-        self.max_length = max_length
-
-    def __len__(self):
-        return len(self.df)
-
-    def __getitem__(self, idx):
-        sentence_a = self.df.iloc[idx]["sentence_A"]
-        sentence_b = self.df.iloc[idx]["sentence_B"]
-
-        # Encode sentences
-        encoded_pair = self.tokenizer.encode_plus(
-            sentence_a,
-            sentence_b,
-            max_length=self.max_length,
-            padding="max_length",
-            truncation=True,
-            return_tensors="pt",
-        )
-
-        return {
-            "input_ids": encoded_pair["input_ids"].flatten(),
-            "attention_mask": encoded_pair["attention_mask"].flatten(),
-        }
-
-
-# Prepare the dataset and dataloader
-train = RelatednessDataset(train_file_path, tokenizer)
-train_dataloader = DataLoader(train, batch_size=16, shuffle=True)
-test = TestRelatednessDataset(test_file_path, tokenizer)
-test_dataloader = DataLoader(test, batch_size=16, shuffle=True)
-val = RelatednessDataset(val_file_path, tokenizer)
-val_dataloader = DataLoader(val, batch_size=16, shuffle=True)
-
-model = AutoModelForCausalLM.from_pretrained(model_name)
+model.gradient_checkpointing_enable()
 model = prepare_model_for_kbit_training(model)
+
+
 config = LoraConfig(
-    r=8,
+    r=2,
     lora_alpha=16,
     target_modules=[
         "q_proj",
-        "k_proj",
         "v_proj",
-        "o_proj",
-        "gate_proj",
-        "up_proj",
-        "down_proj",
-        "lm_head",
     ],
     bias="none",
-    lora_dropout=0.05,  # Conventional
-    # task_type="SEQ_CLS",
+    lora_dropout=0.1,  # Conventional
+    task_type="SEQ_CLS",
 )
+
 model = get_peft_model(model, config)
-accelerator = Accelerator(fsdp_plugin=fsdp_plugin)
-model = accelerator.prepare_model(model)
+print(model.print_trainable_parameters())
+
+# Read the TSV file
+df_train = pd.read_csv(base_file_path + "/train.tsv", sep="\t")
+df_test = pd.read_csv(base_file_path + "/test_features.tsv", sep="\t")
+print(len(df_test))
+print(len(df_train["relatedness_score"].unique()))
+
+df_train, df_val = train_test_split(
+    df_train,
+    test_size=0.1,
+    random_state=42,
+)  # 20% for validation
+
+
+labels = list(set(df_train["relatedness_score"].to_list()))
+ids = [i for i, e in enumerate(labels)]
+id2label = dict(zip(ids, labels))
+label2id = dict(zip(labels, ids))
+
+
+# Custom Dataset
+class TextDataset(Dataset):
+    def __init__(self, dataframe, tokenizer, id2label, label2id, isTest=False):
+        self.dataframe = dataframe
+        self.tokenizer = tokenizer
+        self.label2id = label2id
+        self.id2label = id2label
+        self.isTest = isTest
+        self.max_len = max_len
+
+    def __len__(self):
+        return len(self.dataframe)
+
+    def __getitem__(self, idx):
+        if self.isTest is False:
+            text = (
+                "[ZDANIE_A]: "
+                + self.dataframe.iloc[idx]["sentence_A"]
+                + " [ZDANIE_B]: "
+                + self.dataframe.iloc[idx]["sentence_B"]
+            )
+            inputs = self.tokenizer(text, max_length=self.max_len, truncation=True)
+            label = self.dataframe.iloc[idx]["relatedness_score"]
+            return {"input_ids": inputs["input_ids"], "label": label}
+        else:
+            text = (
+                "[ZDANIE_A]: "
+                + self.dataframe.iloc[idx]["sentence_A"]
+                + " [ZDANIE_B]: "
+                + self.dataframe.iloc[idx]["sentence_B"]
+            )
+            inputs = self.tokenizer(text, max_length=self.max_len, truncation=True)
+            return {"input_ids": inputs["input_ids"]}
+
+
+train_dataset = TextDataset(df_train, tokenizer, id2label, label2id)
+val_dataset = TextDataset(df_val, tokenizer, id2label, label2id)
+test_dataset = TextDataset(df_test, tokenizer, id2label, label2id, isTest=True)
+
+
+# Create datasets
+def convert_to_hf(pytorch_dataset, isTest=False):
+    if isTest is True:
+        hf_data = {"input_ids": []}
+        for item in pytorch_dataset:
+            hf_data["input_ids"].append(item["input_ids"])
+        return HF_Dataset.from_dict(hf_data)
+    else:
+        hf_data = {"input_ids": [], "label": []}
+        for item in pytorch_dataset:
+            hf_data["input_ids"].append(item["input_ids"])
+            hf_data["label"].append(item["label"])
+        return HF_Dataset.from_dict(hf_data)
+
+
+train_dataset = convert_to_hf(train_dataset)
+val_dataset = convert_to_hf(val_dataset)
+test_dataset = convert_to_hf(test_dataset, isTest=True)
+
+print(len(train_dataset), len(val_dataset), len(test_dataset))
+
+
+def get_weights(train_dataset):
+    # Convert to pandas DataFrame and count label occurrences
+    label_counts = train_dataset.to_pandas()["label"].value_counts()
+    label_count_dict = label_counts.to_dict()
+    sorted_dict = {key: label_count_dict[key] for key in sorted(label_count_dict)}
+    weights = [(len(train_dataset)) / (6 * i) for i in sorted_dict.values()]
+    print("get weights", weights)
+    return weights
+
+
+class_weights = get_weights(train_dataset)
+
+
+from sklearn.metrics import mean_absolute_error, mean_squared_error, r2_score
+import numpy as np
+
+
+def compute_regression_metrics(eval_pred):
+    predictions, labels = eval_pred
+
+    # Calculate regression metrics
+    mae = mean_absolute_error(labels, predictions)
+    mse = mean_squared_error(labels, predictions)
+    rmse = np.sqrt(mse)  # Root Mean Squared Error
+    r2 = r2_score(labels, predictions)
+
+    return {"mae": mae, "mse": mse, "rmse": rmse, "r2": r2}
+
+
+# class WeightedCELossTrainer(Trainer):
+#     def compute_loss(self, model, inputs, return_outputs=False):
+#         labels = inputs.pop("labels")
+#         # Get model's predictions
+#         outputs = model(**inputs)
+#         logits = outputs.get("logits")
+#         # Compute custom loss
+#         loss_fct = torch.nn.CrossEntropyLoss(
+#             weight=torch.tensor(class_weights, device=model.device, dtype=logits.dtype)
+#         )
+#         loss = loss_fct(logits.view(-1, self.model.config.num_labels), labels.view(-1))
+#         return (loss, outputs) if return_outputs else loss
+
+
+training_args = TrainingArguments(
+    output_dir="models/klej_polemo2.0-in",
+    learning_rate=1e-4,
+    lr_scheduler_type="constant",
+    warmup_ratio=0.1,
+    max_grad_norm=0.3,
+    per_device_train_batch_size=8,
+    per_device_eval_batch_size=2,
+    num_train_epochs=1,
+    weight_decay=0.001,
+    evaluation_strategy="epoch",
+    save_strategy="epoch",
+    logging_strategy="epoch",
+    load_best_model_at_end=True,
+    metric_for_best_model="eval_mse",
+    greater_is_better=False,
+    remove_unused_columns=False,
+    bf16=True,
+)
+device = "cuda" if torch.cuda.is_available() else "cpu"
+
 model = model.to(device)
 
-
-class LodzianinForSentenceRelatedness(nn.Module):
-    def __init__(self, model):
-        super().__init__()
-        self.lodzianin = model
-        self.regressor = nn.Linear(self.lodzianin.config.hidden_size, 1)
-        self.sigmoid = nn.Sigmoid()
-
-    def forward(self, input_ids, attention_mask):
-        outputs = self.lodzianin(
-            input_ids=input_ids,
-            attention_mask=attention_mask,
-            output_hidden_states=True,
-        )  # Request hidden states
-
-        last_hidden_state = outputs.hidden_states[-1]
-        cls_representation = last_hidden_state[:, 0]
-        score = self.regressor(cls_representation)
-        score = self.sigmoid(score)  # Normalize score to be between 0 and 1
-        return score.squeeze(-1)
+trainer = Trainer(
+    model=model,
+    tokenizer=tokenizer,
+    train_dataset=train_dataset,
+    eval_dataset=val_dataset,
+    args=training_args,
+    compute_metrics=compute_regression_metrics,
+    callbacks=[EarlyStoppingCallback(early_stopping_patience=3)],
+)
 
 
-model = LodzianinForSentenceRelatedness(model)
-model = model.to(device)
-optimizer = bnb.optim.Adam8bit(model.parameters(), lr=2e-5)
+trainer.train()
 
 
-NUM_EPOCHS = 1
-# Training loop
-model.train()
-for epoch in tqdm(range(NUM_EPOCHS)):
-    train_loss = 0
-    for batch in tqdm(train_dataloader, desc="Training", unit="batch"):
-        input_ids = batch["input_ids"].to(device)
-        attention_mask = batch["attention_mask"].to(device)
-        labels = batch["labels"].to(device)
+### TEST ###
+predictions = trainer.predict(test_dataset)
+predicted_labels = (
+    predictions.predictions.squeeze()
+)  # Assuming predictions are a single value per instance
 
-        optimizer.zero_grad()
-        outputs = model(input_ids, attention_mask)
-        loss = nn.MSELoss()(outputs, labels)
-        loss.backward()
-        optimizer.step()
-        train_loss += loss.item()
-
-    avg_train_loss = train_loss / len(train_dataloader)
-    print(f"Train_Loss: {avg_train_loss:.4f}")
-
-    # Validation loop
-    model.eval()  # Set the model to evaluation mode
-    val_loss = 0.0
-    actuals = []
-    predictions = []
-
-    with torch.no_grad():
-        for batch in val_dataloader:
-            input_ids = batch["input_ids"].to(device)
-            attention_mask = batch["attention_mask"].to(device)
-            labels = batch["labels"].to(device)
-            outputs = model(input_ids, attention_mask).squeeze()
-            # Calculate loss
-            loss = nn.MSELoss()(outputs, labels)
-            val_loss += loss.item()
-
-            # Move outputs and labels to CPU for metric calculation
-            actuals.extend(labels.cpu().numpy())
-            predictions.extend(outputs.cpu().numpy())
-
-    # Calculate metrics
-    mse = mean_squared_error(actuals, predictions)
-    r2 = r2_score(actuals, predictions)
-
-    print(f"Validation Loss: {val_loss / len(val_dataloader)}")
-    print(f"Mean Squared Error: {mse}")
-    print(f"R-squared: {r2}")
-    wandb.log(
-        {
-            "epoch": epoch,
-            "loss": avg_train_loss,
-            "eval_loss": val_loss,
-            "eval_r2": r2,
-            "eval_mse": mse,
-        }
-    )
-
-
-##### TEST #####
-predictions = []
-with torch.no_grad():
-    for batch in test_dataloader:
-        input_ids = batch["input_ids"].to(device)
-        attention_mask = batch["attention_mask"].to(device)
-        outputs = model(input_ids, attention_mask).squeeze()
-        predictions.extend(outputs.cpu().numpy())
-        predictions = [x * 5 for x in predictions]
-
-
-results = pd.DataFrame.from_dict({"relatedness_score": predictions})
-print(results)
+result_df = df_test.copy()
+result_df["relatedness_score"] = predicted_labels
+# Convert the predicted labels from ids to actual labels
+result_df["relatedness_score"] = result_df["relatedness_score"]
+print(result_df)
 # Save the results to a CSV file
-result_file_path = base_file_path + f"pred_{challenge_name}.tsv"
-results.to_csv(result_file_path, index=False, sep="\t")
-artifact = wandb.Artifact("test_results", type="result")
-artifact.add_file(result_file_path)
+result_file_path = base_file_path + "/test_pred_polemo2.0-in.tsv"
+print(result_file_path)
+result_df["relatedness_score"].to_csv(result_file_path, index=False, sep="\t")
 
-# Log the artifact to wandb
+artifact = wandb.Artifact("test_pred_polemo2.0-in", type="result")
+artifact.add_file(result_file_path)
 wandb.log_artifact(artifact)

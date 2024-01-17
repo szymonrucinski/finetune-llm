@@ -26,7 +26,7 @@ import wandb
 from peft import LoraConfig, get_peft_model
 
 
-challenge_name = "klej_polemo2.0-out"
+challenge_name = "klej_ar"
 base_file_path = f"./klej_data/{challenge_name}"
 wandb.init(
     project="klej-benchmark-lodzianin",
@@ -44,7 +44,7 @@ tokenizer.pad_token_id = tokenizer.eos_token_id
 tokenizer.pad_token = tokenizer.eos_token
 
 model = AutoModelForSequenceClassification.from_pretrained(
-    model_id, num_labels=4, problem_type="multi_class_classification"
+    model_id, num_labels=5, problem_type="multi_class_classification"
 )
 model.config.pad_token_id = model.config.eos_token_id
 
@@ -70,7 +70,10 @@ print(model.print_trainable_parameters())
 # Read the TSV file
 df_train = pd.read_csv(base_file_path + "/train.tsv", sep="\t")
 df_test = pd.read_csv(base_file_path + "/test_features.tsv", sep="\t")
+# df_val = pd.read_csv(base_file_path + "/dev.tsv", sep="\t")
 print(len(df_test))
+print(len(df_train["target"].unique()))
+
 df_train, df_val = train_test_split(
     df_train,
     test_size=0.1,
@@ -100,12 +103,12 @@ class TextDataset(Dataset):
 
     def __getitem__(self, idx):
         if self.isTest is False:
-            text = "[RECENZJA]: " + self.dataframe.iloc[idx]["sentence"]
+            text = "[Komentarz]: " + self.dataframe.iloc[idx]["sentence"]
             inputs = self.tokenizer(text, max_length=self.max_len, truncation=True)
             label = label2id[self.dataframe.iloc[idx]["target"]]
             return {"input_ids": inputs["input_ids"], "label": label}
         else:
-            text = "[RECENZJA]: " + self.dataframe.iloc[idx]["sentence"]
+            text = "[Komentarz]: " + self.dataframe.iloc[idx]["sentence"]
             inputs = self.tokenizer(text, max_length=self.max_len, truncation=True)
             return {"input_ids": inputs["input_ids"]}
 
@@ -142,7 +145,7 @@ def get_weights(train_dataset):
     label_counts = train_dataset.to_pandas()["label"].value_counts()
     label_count_dict = label_counts.to_dict()
     sorted_dict = {key: label_count_dict[key] for key in sorted(label_count_dict)}
-    weights = [(len(train_dataset)) / (4 * i) for i in sorted_dict.values()]
+    weights = [(len(train_dataset)) / (5 * i) for i in sorted_dict.values()]
     print("get weights", weights)
     return weights
 
@@ -192,14 +195,14 @@ class WeightedCELossTrainer(Trainer):
 
 
 training_args = TrainingArguments(
-    output_dir="models/klej_polemo2.0-out",
+    output_dir=f"models/{challenge_name}",
     learning_rate=1e-4,
     lr_scheduler_type="constant",
     warmup_ratio=0.1,
     max_grad_norm=0.3,
     per_device_train_batch_size=8,
     per_device_eval_batch_size=2,
-    num_train_epochs=5,
+    num_train_epochs=1,
     weight_decay=0.001,
     evaluation_strategy="epoch",
     save_strategy="epoch",
@@ -237,10 +240,10 @@ result_df["target"] = predicted_labels
 result_df["target"] = result_df["target"].map(id2label)
 print(result_df)
 # Save the results to a CSV file
-result_file_path = base_file_path + "/test_pred_polemo2.0-out.tsv"
+result_file_path = base_file_path + "/test_pred_cbd.tsv"
 print(result_file_path)
 result_df["target"].to_csv(result_file_path, index=False, sep="\t")
 
-artifact = wandb.Artifact("test_pred_polemo2.0-out", type="result")
+artifact = wandb.Artifact("test_pred_cbd", type="result")
 artifact.add_file(result_file_path)
 wandb.log_artifact(artifact)
