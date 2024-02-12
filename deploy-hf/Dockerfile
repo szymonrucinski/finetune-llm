@@ -22,7 +22,7 @@ COPY --chown=user . $HOME/app
 
 COPY . .
 USER root
-RUN curl -L https://huggingface.co/szymonrucinski/krakowiak-7b-gguf/resolve/main/krakowiak-7b.gguf.q4_k_m.bin -o krakowiak-7b.gguf.q4_k_m.bin
+RUN curl -L https://huggingface.co/szymonrucinski/krakowiak-7b-gguf/resolve/main/krakowiak-v2-7b-gguf.IQ3_XXS.bin -o krakowiak-v2-7b-gguf.IQ3_XXS.bin
 USER user
 WORKDIR $HOME/app
 
